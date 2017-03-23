@@ -18,6 +18,10 @@
   "homepage": "https://github.com/lopugit/fbot#readme",
   "dependencies": {
     "express": "^4.15.2",
+    "facebook-node-sdk": "^0.2.0",
+    "facebook-sdk": "^0.3.2",
+    "fb": "^1.1.1",
+    "fbgraph": "^1.4.1",
     "mongoose": "^4.9.1",
     "socket.io": "^1.7.3"
   }
