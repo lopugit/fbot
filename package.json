@@ -24,6 +24,7 @@
     "fbgraph": "^1.4.1",
     "mongoose": "^4.9.1",
     "pug": "^2.0.0-beta11",
+    "request": "^2.81.0",
     "socket.io": "^1.7.3",
     "step": "^1.0.0"
   }

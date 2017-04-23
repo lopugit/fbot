@@ -3,9 +3,6 @@ var app = express();
 var url = require('url');
 var path = require('path');
 var step = require('step');
-var http = require('http');
-var https = require('https');
-var request = require('request');
 Step = require('step');
 app.set('view engine', 'pug');
 app.locals.basedir = path.join(__dirname, 'views');
@@ -24,49 +21,15 @@ var conf = {
 };
 
 FB.setAccessToken(conf.appId+"|"+conf.appSecret);
-
-const posts = [];
-var v = 0;
-var length = 0;
-function getPosts(response){
-
-	console.log(response.data);
-	posts.push(response);
-		request(
-    { method: 'GET'
-    , uri: response.paging.next
-    , gzip: true
-    }
-  , function (error, response, body) {
-      // body is the decompressed response body
-      console.log('server encoded the data as: ' + (response.headers['content-encoding'] || 'identity'))
-			var json = JSON.parse(body)
-			length += json.data.length
-			console.log(length);
-			console.log(json);
-			if(json.data.length > 0) {
-				getPosts(json)
-
-			} else {
-				return;
-			}
-    }
-	)
-	// var feed = response;
-	// return true;
-};
-
-function renderAllPosts(posts) {
+FB.api('154420241260828/feed?limit=2000', function(response){
+	console.log(response);
+	var feed = response;
 	app.get('/', function(req, res) {
-
 		res.locals.posts = feed.data;
 		res.render('snippets/posts');
 	});
-};
+});
 
-// FB.api('154420241260828/feed?limit=2000', getPosts);
-// FB.api('174969462937980/feed?limit=2000', getPosts);
-FB.api('616006458523730/feed?limit=2000', getPosts);
 var access_token = FB.getAccessToken();
 console.log(access_token);
 
