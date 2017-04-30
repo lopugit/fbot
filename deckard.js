@@ -26,7 +26,7 @@ var FB = require('fb')
 var conf = require('./conf/fbconf')
 var accessToken = conf.appId+"|"+conf.appSecret
 var postEdges = ["likes", "sharedposts", "attachments", "reactions", "comments"]
-var groupId = "154420241260828"
+var groupId = conf.groupId
 // FB.setAccessToken(conf.appId+"|"+conf.appSecret)
 
 const posts = [];
@@ -42,21 +42,13 @@ var v = 0
 		edgeErrors = []
 		postErrors = []
 		errors = []
-var somePost = new post({data: "something"})
-function renderAllPosts(posts) {
-	app.get('/', function(req, res) {
 
-		res.locals.posts = feed.data;
-		res.render('snippets/posts');
-	});
-};
-
-function getPostEdgeAndSave(edge, fbPostId, ourPostId){
+function getPostEdgeAndSave(edge, fbPostId, ourPostId, accessToken){
 	console.log("requesting edge: ")
 	console.log(edge);
 	console.log("from fb post: ")
 	console.log(fbPostId);
-	var url = "https://graph.facebook.com/v2.8/"+fbPostId+"/"+edge+"?limit=1000&access_token=143951196071022|fcab9c0d477924a62922f63a7e64445a"
+	var url = "https://graph.facebook.com/v2.8/"+fbPostId+"/"+edge+"?limit=1000&access_token="+accessToken
 	console.log("with url %s", url)
 	currentRequests += 1
 	totalEdgeRequests += 1
@@ -102,7 +94,7 @@ function getPostEdgeAndSave(edge, fbPostId, ourPostId){
 	)
 }
 
-function requestPosts(page){
+function requestPosts(page, accessToken){
 	console.log("requesting more posts from");
 	console.log(page);
 	currentRequests += 1
@@ -151,10 +143,10 @@ function requestPosts(page){
 							})
 							newPost.save()
 							for (var j = 0; j < postEdges.length; j++) {
-								getPostEdgeAndSave(postEdges[j], json.data[i].id, newPost._id)
+								getPostEdgeAndSave(postEdges[j], json.data[i].id, newPost._id, accessToken)
 							}
 							if(i == json.data.length -1) {
-								requestPosts(json.paging.next)
+								requestPosts(json.paging.next, accessToken)
 							}
 						}
 					} else {
@@ -168,9 +160,9 @@ function requestPosts(page){
 
 function cloneGroup(groupId, accessToken, postEdges, postsPerRequest, firstUrl){
 	console.log("cloning group: "+groupId)
-	requestPosts(firstUrl)
+	requestPosts(firstUrl, accessToken)
 }
-var hungUrl = "https://graph.facebook.com/v2.8/154420241260828/feed?limit=10&__paging_token=enc_AdBzndqf4tT5eteq6mFk2uyb9ksFWiljiqF0gpf4XRi9ZB9V6cLRsPwix45khAXnQp73wlqN4wWKcZBfZBXvUPW5FGmaZCyJGkkK4lZBWnNKU9JLTCwZDZD&icon_size=16&access_token=143951196071022|fcab9c0d477924a62922f63a7e64445a&until=1463808565"
+var hungUrl = "https://graph.facebook.com/v2.8/154420241260828/feed?limit=10&__paging_token=enc_AdBzndqf4tT5eteq6mFk2uyb9ksFWiljiqF0gpf4XRi9ZB9V6cLRsPwix45khAXnQp73wlqN4wWKcZBfZBXvUPW5FGmaZCyJGkkK4lZBWnNKU9JLTCwZDZD&icon_size=16&access_token="+accessToken+"&until=1463808565"
 var firstUrl = "https://graph.facebook.com/v2.8/"+groupId+"/feed?limit=1&access_token="+accessToken
 cloneGroup(groupId, accessToken, postEdges, 10, firstUrl)
 // FB.api('154420241260828/feed?limit=2000', requestPosts);
@@ -185,13 +177,15 @@ var facebookSdk = require('facebook-sdk');
 // https://github.com/amachang/facebook-node-sdk
 var facebookNodeSdk = require('facebook-node-sdk');
 
+app.get('/', function(req, res) {
+	res.render('snippets/posts');
+});
 
 app.get('/running', function(req, res){
 	res.send("Active requests: " + currentRequests +" Total post requests: "+ totalPostRequests + " Total edge requests: "+ totalEdgeRequests +" Total requests: " + totalRequests)
 })
 
 app.get('/stats/:stat', function(req, res){
-
 	var stats = {
 		currentRequests : currentRequests,
 		currentEdgeRequests : currentEdgeRequests,
@@ -201,7 +195,6 @@ app.get('/stats/:stat', function(req, res){
 		totalPostRequests : totalPostRequests,
 		totalErrors : totalErrors
 	}
-
 	stats.size = function(obj) {
     var size = 0, key;
     for (key in obj) {
@@ -209,34 +202,25 @@ app.get('/stats/:stat', function(req, res){
     }
     return size;
 	};
-
 	var stat = req.params.stat
-	console.log("what")
 	if (stat !== "all") {
 		res.send(stat+": "+stats[stat])
-		console.log("what1")
 	} else if (stat == "all") {
 		res.setHeader('Content-Type', 'text/html');
 		res.writeHead(200)
-		console.log("what2")
 		for (var i = 0; i < stats.size(stats); i++) {
-			console.log("what3")
 			res.write(stat + ": "+stats[i])
-			console.error("IT DOES")
 			if (i == stats.length-1) {
-				console.error("IT DOES")
 				res.end()
 			}
 		}
 	} else {
 		res.send(500, "please request a stat")
 	}
-
-
 })
 
+
+
 // Be a bot
-
 var port = 5555;
-
 app.listen(port);
