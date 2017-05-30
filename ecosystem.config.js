@@ -13,7 +13,7 @@ module.exports = {
         COMMON_VARIABLE: 'true'
       },
 
-      watch	: ["./deckard.js", "./models", "./routes"],
+      // watch	: ["./deckard.js", "./models", "./routes"],
       env_production : {
         NODE_ENV: 'production'
       }
