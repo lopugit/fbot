@@ -13,7 +13,7 @@ app.locals.basedir = path.join(__dirname, 'views')
     // FB NODE Packages in order of version number
 
 var post = require('./models/post')
-var logs = require('./models/logs')
+var log = require('./models/logs')
 mongoose.Promise = require('bluebird')
 var db = mongoose.createConnection("mongodb://localhost:27017/deckard")
 var conf = require('./conf/fbconf')
@@ -96,64 +96,78 @@ function getPostEdgeAndSave(vars) {
                 console.log("Number of active requests %s", currentRequests)
             }
             // Check if there is any data to process
-            if (json.data.length > 0) {
-                if (edge == "attachments") {
-                    if (json.data.type == "photo") {
-                        postModel.findOne({
-                            _id: ourPostId
-                        }).then(function(err, post) {
-                            if (err) {
-                                console.error("there was an err when trying to find a post while saving attachment that was a photo")
-                            } else if (post) {
-                                post[edge] = json.data[0].media
-                                post.image = json.data[0].media.src
-                                post.save(function(err) {
-                                    if (err !== null) {
-                                        console.error(err)
-                                            // post.save(function(err) {
-                                            //     if (err !== null) {
-                                            //         console.error(err)
-                                            //     }
-                                            // })
-
-                                    }
-                                })
-                            }
-                        })
-
-                    }
-                    // If the attachment was not a photo we simply return, we will handle other attachments later :)
-                    else {
-                        return
-                    }
-                }
-                // If edge was not attachments, simply save edge as the returned data
-                else {
-                    postModel.findOne({
-                        _id: ourPostId
-                    }).then(function(err, post) {
-                        if (err) {
-                            console.error("there was an err when trying to find a post while saving abitrary attachment data")
-                        } else if (post) {
-                            post[edge] = json.data
-                            post.save(function(err) {
+            if (json.data) {
+                if (json.data.length > 0) {
+                    if (edge == "attachments") {
+                        if (json.data.type == "photo") {
+                            postModel.findOne({
+                                _id: ourPostId
+                            }).then((post, err) => {
                                 if (err) {
-                                    console.error(err)
-                                    console.log("trying to save post again after error")
+                                    console.error("there was an err when trying to find a post while saving attachment that was a photo")
+                                } else if (post) {
+                                    post[edge] = json.data[0].media
+                                    post.image = json.data[0].media.src
                                     post.save(function(err) {
-                                        if (err) {
+                                        if (err !== null) {
+                                            console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
                                             console.error(err)
+                                            console.log("trying to save post again after error")
+                                            post.save(function(err) {
+                                                if (err) {
+                                                    console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                                    console.error(err)
+                                                }
+                                            })
+
                                         }
                                     })
+                                } else {
+                                    console.error("we found no post when searching for id: " + ourPostId)
 
                                 }
                             })
+
                         }
-                    })
+                        // If the attachment was not a photo we simply return, we will handle other attachments later :)
+                        else {
+                            return
+                        }
+                    }
+                    // If edge was not attachments, simply save edge as the returned data
+                    else {
+                        postModel.findOne({
+                            _id: ourPostId
+                        }).then((post, err) => {
+                            if (err) {
+                                console.error("there was an err when trying to find a post while saving abitrary attachment data")
+                            } else if (post) {
+                                post[edge] = json.data
+                                post.save(function(err) {
+                                    if (err) {
+                                        console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                        console.error(err)
+                                        console.log("trying to save post again after error")
+                                        post.save(function(err) {
+                                            if (err) {
+                                                console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                                console.error(err)
+                                            }
+                                        })
+                                    }
+                                })
+                            } else {
+                                console.error("we found no post when searching for id: " + ourPostId)
+                            }
+                        })
+                    }
                 }
-            }
-            // If there was no data returned
-            else {
+                // If there was no data returned
+                else {
+                    return
+                }
+
+            } else {
                 return
             }
         }
@@ -177,10 +191,11 @@ function recursiveSaveAndUpdatePosts(vars) {
         }
         postModel.findOne({
             "fbData.id": json.data[i].id
-        }, function(err, post) {
+        }).then((post, err) => {
             // CHECK IF OUR POST LOOKUP USING FACEBOOK POST ID RETURNED ANY POSTS
             if (err) {
-                console.error("there was an error when looking up a post with id" + json.data[i].id)
+                console.error("there was an error when looking up a post with id " + json.data[i].id)
+                console.error(err)
             } else if (post) {
                 // IF THE RECEIVED POST UPDATE TIME DOES NOT MATCH THE STORED POSTS LAST UPDATED TIME WE REPLACE THE DATA AND SAVE THE HISTORY
                 if (post.fbData.updated_time !== json.data[i].updated_time) {
@@ -190,7 +205,16 @@ function recursiveSaveAndUpdatePosts(vars) {
                     post.realm = realm
                     post.save(function(err) {
                         if (err) {
-                            console.log(err)
+                            console.error("there was an error when saving the post " + json.data[i].id)
+                            console.error(err)
+                            console.log("trying to save post again after error")
+                            post.save(function(err) {
+                                if (err) {
+                                    console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                    console.error(err)
+                                }
+                            })
+
                         }
                     })
                     if (logging) {
@@ -246,7 +270,16 @@ function recursiveSaveAndUpdatePosts(vars) {
                     // SAVE THE NEW POST
                 newPost.save(function(err) {
                     if (err) {
-                        console.log(err)
+                        console.error("there was an error when saving the post " + json.data[i].id)
+                        console.error(err)
+                        console.log("trying to save post again after error")
+                        newPost.save(function(err) {
+                            if (err) {
+                                console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                console.error(err)
+                            }
+                        })
+
                     }
                 })
                 if (logging) {
@@ -281,7 +314,8 @@ function recursiveSaveAndUpdatePosts(vars) {
             page: json.paging.next,
             accessToken: accessToken,
             postModel: postModel,
-            postEdges: postEdges
+            postEdges: postEdges,
+            groupName: realm
         })
     }
 }
@@ -292,7 +326,6 @@ function requestPosts(vars) {
     postModel = vars.postModel
     groupName = vars.groupName
     postEdges = vars.postEdges
-
     if (logging) {
         console.log("requesting more posts from");
         console.log(page);
@@ -304,8 +337,9 @@ function requestPosts(vars) {
         totalRequests += 1
         console.log("total requests %s", totalRequests)
         console.log("Number of active requests %s", currentRequests)
+        console.log("this is the current page: ")
+        console.log(page)
     }
-    console.log(page)
     request({
         method: 'GET',
         uri: page,
@@ -333,6 +367,8 @@ function requestPosts(vars) {
                 errors.push(error)
                 postErrors.push(error)
             }
+            console.error("there was an error in the http request for page data: ")
+            console.error(error)
             return
         } else if (body) {
             var json = JSON.parse(body)
@@ -341,13 +377,25 @@ function requestPosts(vars) {
                 if (json.hasOwnProperty("paging")) {
                     console.log("Here is the next page: \n%s \nand previous page: \n%s", json.paging.next, json.paging.previous)
                 }
-                console.log(json)
             }
             if (minimalFeedback) {
                 console.log("Number of active requests %s", currentRequests)
             }
             // Check if the returned data has any data in it (posts, events, etc..)
             if (json.data) {
+                if (json.hasOwnProperty("paging")) {
+                    var newLog = new log({
+                        type: groupName + "GroupPostsPagingUrl",
+                        data: json.paging.previous
+                    })
+                    newLog.save(err => {
+                        if (err) {
+                            console.error("there was an error saving the latest page log")
+                            console.error(err)
+                        }
+                    })
+                }
+
                 if (json.data.length > 0) {
                     recursiveSaveAndUpdatePosts({
                         i: 0,
@@ -367,7 +415,6 @@ function requestPosts(vars) {
             }
         }
     })
-    console.log(groupName)
 }
 
 function cloneGroup(vars) {
@@ -386,6 +433,7 @@ function addrealm(realm, model) {
     var stream = model.find().cursor()
     stream.on('data', function(doc) {
         arbTotalCount += 1
+        console.log("this is the arbTotalCount: ")
         console.log(arbTotalCount)
         if (loggingrealmUpdate) {
             console.log(doc.realmList)
@@ -394,6 +442,7 @@ function addrealm(realm, model) {
             doc.realmList.push(realm)
             doc.save(function(err) {
                 if (err) {
+                    console.error("there was an error pushing the realm into the realm list")
                     console.error(err)
                 }
             })
@@ -403,6 +452,7 @@ function addrealm(realm, model) {
         }
 
     }).on('error', function(err) {
+        console.error("there was an error in the stream")
         console.error(err)
     }).on('close', function() {
         console.log("updated all posts")
@@ -437,20 +487,22 @@ function countCommenters(model) {
                 if (i == doc.comments.length - 1) {
                     doc.commenters = commenters
                     doc.save(function(err) {
-                        if (err !== null) {
+                        if (err) {
+                            console.error("there was an error when saving the document after applying commenters script: ")
                             console.log(err)
                         }
                     })
                 }
             }
             if (logging) {
-                // console.log("number of ")
+                console.log("this is the number of commenters: ")
                 console.log(doc.commenters.length)
             }
         }
 
 
     }).on('error', function(err) {
+        console.error("there was an error in the stream when calculating unique commenters")
         console.error(err)
     }).on('close', function() {
         console.log("total unique commenters was %s", uniqueCommenters.length)
@@ -458,13 +510,6 @@ function countCommenters(model) {
     })
 }
 
-// var groupId = "616006458523730"
-var hungUrl = "https://graph.facebook.com/v2.8/154420241260828/feed?limit=10&__paging_token=enc_AdClZAgLdpsmibpOspZApDGNTZCrG5vnhwTjZBXVUwKnC0aBoZBxr9WlBPby7rhSblXEo3QHpiapdbIa41LB36BNSZAtyiQJIN97X7ojOZBrQXQuhZCpKAZDZD&icon_size=16&access_token=143951196071022|fcab9c0d477924a62922f63a7e64445a&until=1475222768"
-var nextHungUrl = "https://graph.facebook.com/v2.8/154420241260828/feed?limit=10&__paging_token=enc_AdCcIlNMwIc0Y7PyRtI1zxgsHB46QUH7ZC47anhUSoVTsv5wR8Tmi2rUcp6bTlH1TrHQTZCaOabrFa4D3Fn9KXOJ0FaUgqeh73mZBgB7jfjFwdHzAZDZD&icon_size=16&access_token=143951196071022|fcab9c0d477924a62922f63a7e64445a&until=1462765025"
-var nextNextHungUrl = "https://graph.facebook.com/v2.8/154420241260828/feed?limit=50&__paging_token=enc_AdAZAZASnnGmVHf5LIXRAl0TELAusKtAS6TyuBDMOWaGPlGEqQlImJHZBfAlaEdI0BjEfYD3ieGxCWl9yuZBZBzmH7ZCHFeZCahE3fZClU7BufL9UTip8AZDZD&icon_size=16&access_token=143951196071022|fcab9c0d477924a62922f63a7e64445a&until=1460946514"
-var next3HungUrl = "https://graph.facebook.com/v2.8/154420241260828/feed?limit=5&__paging_token=enc_AdCVMsb221H2XjWolPqHIfYDJgt5iVJ39daGzTOP0nzngsZAmFNbZBYWXh3B5xEWYoT8jQy69OzIdtnrgnVO4MPuTP3jztyWcOVGGlwgqQbtVqtQZDZD&icon_size=16&access_token=143951196071022|fcab9c0d477924a62922f63a7e64445a&until=1447243470"
-var next4HungUrl = "https://graph.facebook.com/v2.8/154420241260828/feed?limit=1&__paging_token=enc_AdCoHZCGpvItK3Ub7L16opYrRbKxoF0ZCaw3GDryQwsN9PEHV1w3GUokFSZBZBezZCmVMFRZBoMyv2Sc3F3K8MRlaUWay9pvEg94EFytWhKKtiZAAFO4QZDZD&icon_size=16&access_token=143951196071022|fcab9c0d477924a62922f63a7e64445a&until=1429367168"
-var limit = 1
 var logging = false
 var loggingrealmUpdate = false
 var minimalFeedback = true
@@ -472,7 +517,7 @@ var minimalFeedback = true
 cloneGroup({
     groupId: '154420241260828',
     accessToken: conf.accessToken(),
-    firstUrl: "https://graph.facebook.com/v2.8/154420241260828/feed?limit=" + limit + "&access_token=" + conf.accessToken(),
+    firstUrl: "https://graph.facebook.com/v2.8/154420241260828/feed?limit=1&access_token=" + conf.accessToken(),
     postModel: post,
     groupName: "philosophy",
     postEdges: conf.postEdges

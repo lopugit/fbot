@@ -5,8 +5,8 @@ var Schema = mongoose.Schema
 
 var logSchema = new Schema({
     type: { type: String, default: "log" },
-    data: { type: {}, default: null },
-    string: { type: String, default: null },
+    data: { type: String, default: null },
+    dataObj: { type: {}, default: null },
     date: { type: Date, default: Date.now() }
 })
 
