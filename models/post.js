@@ -6,12 +6,60 @@ var Schema = mongoose.Schema
 var postSchema = new Schema({
     type: { type: String, default: "lopu" },
     data: { type: {}, default: null },
-    comments: { type: {}, default: [] },
-    sharedposts: { type: {}, default: [] },
-    likes: { type: {}, default: [] },
-    reactions: { type: {}, default: [] },
-    attachments: { type: {}, default: [] },
-    saves: { type: {}, default: [] },
+    comments: {
+        data: { type: [{}], default: [] },
+        history: {
+            type: [
+                {}
+            ],
+            default: []
+        }
+    },
+    sharedposts: {
+        data: { type: [{}], default: [] },
+        history: {
+            type: [
+                {}
+            ],
+            default: []
+        }
+    },
+    likes: {
+        data: { type: [{}], default: [] },
+        history: {
+            type: [
+                {}
+            ],
+            default: []
+        }
+    },
+    reactions: {
+        data: { type: [{}], default: [] },
+        history: {
+            type: [
+                {}
+            ],
+            default: []
+        }
+    },
+    attachments: {
+        data: { type: [{}], default: [] },
+        history: {
+            type: [
+                {}
+            ],
+            default: []
+        }
+    },
+    saves: {
+        data: { type: [{}], default: [] },
+        history: {
+            type: [
+                {}
+            ],
+            default: []
+        }
+    },
     balance: { type: Number, default: 50, min: 0, max: 100 },
     politcal: { type: Number, default: 50, min: 0, max: 100 },
     consciousness: { type: Number, default: 0, min: 0, max: 100 },

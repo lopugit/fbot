@@ -43,6 +43,7 @@ function getPostEdgeAndSave(vars) {
     ourPostId = vars.ourPostId
     accessToken = vars.accessToken
     postModel = vars.postModel
+    realm = vars.realm
     url = "https://graph.facebook.com/v2.8/" + fbId + "/" + edge + "?limit=600&access_token=" + accessToken
     if (logging) {
         console.log("requesting edge: ")
@@ -142,20 +143,65 @@ function getPostEdgeAndSave(vars) {
                             if (err) {
                                 console.error("there was an err when trying to find a post while saving abitrary attachment data")
                             } else if (post) {
-                                post[edge] = json.data
-                                post.save(function(err) {
-                                    if (err) {
-                                        console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
-                                        console.error(err)
-                                        console.log("trying to save post again after error")
+                                if (edge == "comments") {
+                                    if (json.data) {
+                                        for (comment in json.data) {
+                                            postModel.findOne({
+                                                "fbData.id": json.data[comment].id
+                                            }).then((post, err) => {
+                                                if (err) {
+                                                    console.error("there was an error finding a post matching the id of a comment from post " + ourPostId + " and with comment Id " + json.data[comment].id)
+                                                    console.error(err)
+                                                }
+                                            })
+                                            var newPost = new postModel({
+                                                fbData: json.data[comment],
+                                                realm: realm,
+                                                lastUpdated: json.data.created_time
+                                            })
+
+                                            // console.log(json.data[comment])
+                                        }
+                                    }
+                                } else {
+                                    if (post[edge].data.length > 0) {
+                                        post[edge].history.push({
+                                            data: post[edge].data,
+                                            date: Date.now()
+                                        })
+                                        post[edge].data = json.data
                                         post.save(function(err) {
                                             if (err) {
                                                 console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
                                                 console.error(err)
+                                                console.log("trying to save post again after error")
+                                                post.save(function(err) {
+                                                    if (err) {
+                                                        console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                                        console.error(err)
+                                                    }
+                                                })
+                                            }
+                                        })
+
+                                    } else {
+                                        post[edge].data = json.data
+                                        post.save(function(err) {
+                                            if (err) {
+                                                console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                                console.error(err)
+                                                console.log("trying to save post again after error")
+                                                post.save(function(err) {
+                                                    if (err) {
+                                                        console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                                        console.error(err)
+                                                    }
+                                                })
                                             }
                                         })
                                     }
-                                })
+
+                                }
                             } else {
                                 console.error("we found no post when searching for id: " + ourPostId)
                             }
@@ -227,7 +273,8 @@ function recursiveSaveAndUpdatePosts(vars) {
                             fbId: json.data[i].id,
                             ourPostId: post._id,
                             accessToken: accessToken,
-                            postModel: postModel
+                            postModel: postModel,
+                            realm: realm
                         })
                     }
                     recursiveSaveAndUpdatePosts({
@@ -247,7 +294,8 @@ function recursiveSaveAndUpdatePosts(vars) {
                             fbId: json.data[i].id,
                             ourPostId: post._id,
                             accessToken: accessToken,
-                            postModel: postModel
+                            postModel: postModel,
+                            realm: realm
                         })
                     }
                     recursiveSaveAndUpdatePosts({
@@ -302,7 +350,8 @@ function recursiveSaveAndUpdatePosts(vars) {
                         fbId: json.data[i].id,
                         ourPostId: newPost._id,
                         accessToken: accessToken,
-                        postModel: postModel
+                        postModel: postModel,
+                        realm: realm
                     })
                 }
             }
