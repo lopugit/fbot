@@ -6,11 +6,12 @@ var Schema = mongoose.Schema
 var postSchema = new Schema({
     type: { type: String, default: "lopu" },
     data: { type: {}, default: null },
+    id: { type: String },
     comments: {
-        data: { type: [{}], default: [] },
+        data: { type: [], default: [] },
         history: {
             type: [
-                {}
+                []
             ],
             default: []
         }
@@ -43,7 +44,7 @@ var postSchema = new Schema({
         }
     },
     attachments: {
-        data: { type: [{}], default: [] },
+        data: { type: [String], default: [] },
         history: {
             type: [
                 {}
@@ -73,7 +74,8 @@ var postSchema = new Schema({
     image: { type: String, default: null },
     fbData: { type: {}, default: null },
     history: { type: [{}], default: [] },
-    commenters: { type: [{}], default: [] }
+    commenters: { type: [{}], default: [] },
+    lastUpdate: { type: String, default: Date.now() }
 })
 
 var post = db.model('post', postSchema)

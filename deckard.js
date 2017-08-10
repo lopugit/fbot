@@ -8,13 +8,15 @@ https = require('https')
 request = require('request-promise')
 mongoose = require('mongoose')
 Step = require('step')
+Promise = require('bluebird')
 app.set('view engine', 'pug')
 app.locals.basedir = path.join(__dirname, 'views')
     // FB NODE Packages in order of version number
 
 var post = require('./models/post')
 var log = require('./models/logs')
-mongoose.Promise = require('bluebird')
+
+mongoose.Promise = Promise
 var db = mongoose.createConnection("mongodb://localhost:27017/deckard")
 var conf = require('./conf/fbconf')
 
@@ -95,9 +97,13 @@ function getPostEdgeAndSave(vars) {
             }
             if (minimalFeedback) {
                 console.log("Number of active requests %s", currentRequests)
+                console.log("Number of post requests %s", totalPostRequests)
+                console.log("Number of total requests %s", totalRequests)
             }
             // Check if there is any data to process
             if (json.data) {
+                console.log("this is json.data when looking up edge: " + edge)
+                console.log(json.data)
                 if (json.data.length > 0) {
                     if (edge == "attachments") {
                         if (json.data.type == "photo") {
@@ -107,7 +113,9 @@ function getPostEdgeAndSave(vars) {
                                 if (err) {
                                     console.error("there was an err when trying to find a post while saving attachment that was a photo")
                                 } else if (post) {
-                                    post[edge] = json.data[0].media
+                                    console.log("this is json.data[0].media")
+                                    console.log(json.data[0].media)
+                                    post[edge].data.push(json.data[0].media)
                                     post.image = json.data[0].media.src
                                     post.save(function(err) {
                                         if (err !== null) {
@@ -137,40 +145,56 @@ function getPostEdgeAndSave(vars) {
                     }
                     // If edge was not attachments, simply save edge as the returned data
                     else {
+                        console.log("now we look up the post with id: " + ourPostId)
                         postModel.findOne({
                             _id: ourPostId
                         }).then((post, err) => {
+                            console.log("this is the returned or found post")
+                            console.log(post)
                             if (err) {
-                                console.error("there was an err when trying to find a post while saving abitrary attachment data")
+                                console.error("there was an error when trying to find a post while saving abitrary attachment data")
+                                console.error(err)
                             } else if (post) {
                                 if (edge == "comments") {
+                                    console.log("the edge we want is comments")
                                     if (json.data) {
-                                        for (comment in json.data) {
-                                            postModel.findOne({
-                                                "fbData.id": json.data[comment].id
-                                            }).then((post, err) => {
-                                                if (err) {
-                                                    console.error("there was an error finding a post matching the id of a comment from post " + ourPostId + " and with comment Id " + json.data[comment].id)
-                                                    console.error(err)
-                                                }
+                                        console.log("there was json.data and this is it this is json.data")
+                                        console.log(json.data)
+                                        Promise.map(json.data, comment => {
+                                            console.log("this is the comment in json.data when mapping promises")
+                                            console.log(comment)
+                                            return postModel.findOne({
+                                                "fbData.id": comment.id
                                             })
-                                            var newPost = new postModel({
-                                                fbData: json.data[comment],
-                                                realm: realm,
-                                                lastUpdated: json.data.created_time
-                                            })
+                                        }).then(commentDocs => {
+                                            // console.log("this is all commentDocs")
+                                            // console.log(commentDocs)
+                                            if (commentDocs.length > 0) {
+                                                pushComments({
+                                                    i: 0,
+                                                    commentDocs: commentDocs,
+                                                    post: post,
+                                                    json: json
+                                                })
+                                            }
 
-                                            // console.log(json.data[comment])
-                                        }
+
+                                        })
+                                    } else {
+                                        return
                                     }
                                 } else {
+                                    // console.log("this is the edge when it says cannot read the length of undefined")
+                                    // console.log(edge)
+                                    // console.log("and so this is post[edge].data")
+                                    // console.log(post[edge].data)
                                     if (post[edge].data.length > 0) {
                                         post[edge].history.push({
                                             data: post[edge].data,
                                             date: Date.now()
                                         })
                                         post[edge].data = json.data
-                                        post.save(function(err) {
+                                        post.save(err => {
                                             if (err) {
                                                 console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
                                                 console.error(err)
@@ -220,6 +244,185 @@ function getPostEdgeAndSave(vars) {
     })
 }
 
+function pushComments(vars) {
+    var i = vars.i
+    post = vars.post
+    commentDocs = vars.commentDocs
+    max = commentDocs.length
+    json = vars.json
+    if (i >= max - 1) {
+        return
+    } else {
+        if (commentDocs[i]) {
+            if (commentDocs[i].fbData.message !== json.data[i].message) {
+                commentDocs[i].history.push(commentDocs[i].fbData)
+                commentDocs[i].fbData = json.data[i]
+                commentDocs[i].save(err => {
+                    if (err) {
+                        console.error("there was an error saving the post that is really a comment")
+                        console.error(err)
+                        console.error("trying to save again")
+                        commentDocs[i].save(err => {
+                            if (err) {
+                                console.error("there was an error saving the post that is really a comment")
+                                console.error(err)
+                            } else {
+                                vars.i += 1
+                                pushComments(vars)
+                            }
+                        })
+                    } else {
+                        console.log("successfully saved the commentDoc")
+                        vars.i += 1
+                        pushComments(vars)
+                    }
+                })
+                console.log("this is i in the for loop of commentDocs.length")
+                console.log(i)
+                console.log("this is the indexOf search for the newCommentPost id in post.comments.data")
+                console.log(post.comments.data.indexOf(commentDocs[i].fbData.id))
+                console.log("and this is the id of the newComment")
+                console.log(commentDocs[i].fbData.id)
+                if (post.comments.data.indexOf(commentDocs[i].fbData.id) < 0) {
+                    post.comments.data.push(commentDocs[i].fbData.id)
+                    post.save(err => {
+                        if (err) {
+                            console.error("there was an error when trying to save the post to update comments")
+                            console.error(err)
+                            console.error("saving again")
+                            post.save(err => {
+                                if (err) {
+                                    console.error("there was an error when trying to save the post to update comments")
+                                    console.error(err)
+                                } else {
+                                    vars.i += 1
+                                    pushComments(vars)
+                                }
+                            })
+                        } else {
+                            console.log("successfully saved the post with updated comments list")
+                            console.log(post)
+                            vars.i += 1
+                            pushComments(vars)
+                        }
+                    })
+                }
+                for (edge in postEdges) {
+                    getPostEdgeAndSave({
+                        edge: postEdges[edge],
+                        fbId: commentDocs[i].fbData.id,
+                        ourPostId: commentDocs[i]._id,
+                        accessToken: accessToken,
+                        postModel: postModel,
+                        realm: realm
+                    })
+                }
+            } else {
+                if (post.comments.data.indexOf(commentDocs[i].fbData.id) < 0) {
+                    post.comments.data.push(commentDocs[i].fbData.id)
+                    post.save(err => {
+                        if (err) {
+                            console.error("there was an error when trying to save the post to update comments")
+                            console.error(err)
+                            console.error("saving again")
+                            post.save(err => {
+                                if (err) {
+                                    console.error("there was an error when trying to save the post to update comments")
+                                    console.error(err)
+                                } else {
+                                    vars.i += 1
+                                    pushComments(vars)
+                                }
+                            })
+                        } else {
+                            console.log("successfully saved the post with updated comments list")
+                            console.log(post)
+                            vars.i += 1
+                            pushComments(vars)
+                        }
+                    })
+                } else {
+                    vars.i += 1
+                    pushComments(vars)
+                }
+            }
+        } else {
+            // console.log("this is the json.data[comment] data when saving a newCommentPost")
+            // console.log(json.data[comment])
+            console.log("there was no post document for the looked up post, so we're saving a new one, it's really a comment")
+            var newCommentPost = new postModel({
+                    fbData: json.data[i],
+                    realm: realm,
+                    id: json.data[i].id,
+                    lastUpdated: json.data[i].created_time
+                })
+                // console.log("this is the id of the new comment we're saving as a post: ")
+                // console.log(newCommentPost.fbData.id)
+            newCommentPost.save(err => {
+                if (err) {
+                    console.error("there was an error saving the newCommentPost with id: " + newCommentPost.fbData.id)
+                    console.error(err)
+                    newCommentPost.save(err => {
+                        if (err) {
+                            console.error("there was an error saving the newCommentPost with id: " + newCommentPost.fbData.id)
+                            console.error(err)
+                        } else {}
+                    })
+                } else {}
+            })
+            console.log("this is i in this forloop of all comments in the post but really it's the length of the results from looking up all id's of the comments on a post")
+            console.log(i)
+            console.log("this is the indexOf search for the newCommentPost id in post.comments.data")
+            console.log(post.comments.data.indexOf(newCommentPost.fbData.id))
+            console.log("and this is the id of the newComment")
+            console.log(newCommentPost.fbData.id)
+            if (post.comments.data.indexOf(newCommentPost.fbData.id) < 0) {
+                console.log("this is the post we're inserting the comments into")
+                console.log(post.fbData)
+                console.log(post.comments)
+                console.log("the id of the comment we want to add was not yet in the post comments list of ids")
+                post.comments.data.push(newCommentPost.fbData.id)
+                post.save(err => {
+                    if (err) {
+                        console.error("there was an error when trying to save the post to update comments")
+                        console.error(err)
+                        console.error("saving again")
+                        post.save(err => {
+                            if (err) {
+                                console.error("there was an error when trying to save the post to update comments")
+                                console.error(err)
+                            } else {
+                                console.log("we saved the post with comments pushed, here's the post: ")
+                                console.log(post)
+                                vars.i += 1
+                                pushComments(vars)
+
+                            }
+
+                        })
+                    } else {
+                        console.log("we saved the post with comments pushed, here's the post: ")
+                        console.log(post)
+                        vars.i += 1
+                        pushComments(vars)
+
+                    }
+                })
+                for (edge in postEdges) {
+                    getPostEdgeAndSave({
+                        edge: postEdges[edge],
+                        fbId: newCommentPost.fbData.id,
+                        ourPostId: newCommentPost._id,
+                        accessToken: accessToken,
+                        postModel: postModel,
+                        realm: realm
+                    })
+                }
+            }
+        }
+    }
+}
+
 function recursiveSaveAndUpdatePosts(vars) {
     var i = vars.i
     postModel = vars.postModel
@@ -256,7 +459,7 @@ function recursiveSaveAndUpdatePosts(vars) {
                             console.log("trying to save post again after error")
                             post.save(function(err) {
                                 if (err) {
-                                    console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                    console.error("there was an error when saving the post data for post " + json.data[i].id + " a second time")
                                     console.error(err)
                                 }
                             })
@@ -307,13 +510,14 @@ function recursiveSaveAndUpdatePosts(vars) {
                         postEdges: postEdges
                     })
                 }
-            } else if (post == undefined) {
+            } else {
                 // MAKE A NEW POST OBJECT
                 var newPost = new postModel({
                         fbData: json.data[i],
                         type: "fb",
                         lastUpdated: json.data[i].updated_time,
-                        realm: realm
+                        realm: realm,
+                        id: json.data[i].id
                     })
                     // SAVE THE NEW POST
                 newPost.save(function(err) {
@@ -429,6 +633,8 @@ function requestPosts(vars) {
             }
             if (minimalFeedback) {
                 console.log("Number of active requests %s", currentRequests)
+                console.log("Number of total post requests %s", totalPostRequests)
+                console.log("Number of total requests %s", totalRequests)
             }
             // Check if the returned data has any data in it (posts, events, etc..)
             if (json.data) {
