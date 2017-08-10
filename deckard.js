@@ -258,31 +258,34 @@ function pushComments(vars) {
                 commentDocs[i].history.push(commentDocs[i].fbData)
                 commentDocs[i].fbData = json.data[i]
                 commentDocs[i].save(err => {
-                    if (err) {
-                        console.error("there was an error saving the post that is really a comment")
-                        console.error(err)
-                        console.error("trying to save again")
-                        commentDocs[i].save(err => {
-                            if (err) {
-                                console.error("there was an error saving the post that is really a comment")
-                                console.error(err)
-                            } else {
-                                vars.i += 1
-                                pushComments(vars)
-                            }
-                        })
-                    } else {
-                        console.log("successfully saved the commentDoc")
-                        vars.i += 1
-                        pushComments(vars)
-                    }
-                })
-                console.log("this is i in the for loop of commentDocs.length")
-                console.log(i)
-                console.log("this is the indexOf search for the newCommentPost id in post.comments.data")
-                console.log(post.comments.data.indexOf(commentDocs[i].fbData.id))
-                console.log("and this is the id of the newComment")
-                console.log(commentDocs[i].fbData.id)
+                        if (err) {
+                            console.error("there was an error saving the post that is really a comment")
+                            console.error(err)
+                            console.error("trying to save again")
+                            commentDocs[i].save(err => {
+                                if (err) {
+                                    console.error("there was an error saving the post that is really a comment")
+                                    console.error(err)
+                                } else {
+                                    console.log("successfully saved the following commentDocs[i]")
+                                    console.log(commentDocs[i])
+                                    vars.i += 1
+                                    pushComments(vars)
+                                }
+                            })
+                        } else {
+                            console.log("successfully saved the following commentDocs[i]")
+                            console.log(commentDocs[i])
+                            vars.i += 1
+                            pushComments(vars)
+                        }
+                    })
+                    // console.log("this is i in the for loop of commentDocs.length")
+                    // console.log(i)
+                    // console.log("this is the indexOf search for the newCommentPost id in post.comments.data")
+                    // console.log(post.comments.data.indexOf(commentDocs[i].fbData.id))
+                    // console.log("and this is the id of the newComment")
+                    // console.log(commentDocs[i].fbData.id)
                 if (post.comments.data.indexOf(commentDocs[i].fbData.id) < 0) {
                     post.comments.data.push(commentDocs[i].fbData.id)
                     post.save(err => {
@@ -347,40 +350,47 @@ function pushComments(vars) {
                 }
             }
         } else {
-            // console.log("this is the json.data[comment] data when saving a newCommentPost")
-            // console.log(json.data[comment])
+            console.log("this is the json.data[i] data when saving a newCommentPost")
+            console.log(json.data[i])
             console.log("there was no post document for the looked up post, so we're saving a new one, it's really a comment")
             var newCommentPost = new postModel({
                     fbData: json.data[i],
                     realm: realm,
                     id: json.data[i].id,
-                    lastUpdated: json.data[i].created_time
+                    lastUpdated: json.data[i].created_time,
+                    type: "fbComment"
                 })
                 // console.log("this is the id of the new comment we're saving as a post: ")
                 // console.log(newCommentPost.fbData.id)
             newCommentPost.save(err => {
-                if (err) {
-                    console.error("there was an error saving the newCommentPost with id: " + newCommentPost.fbData.id)
-                    console.error(err)
-                    newCommentPost.save(err => {
-                        if (err) {
-                            console.error("there was an error saving the newCommentPost with id: " + newCommentPost.fbData.id)
-                            console.error(err)
-                        } else {}
-                    })
-                } else {}
-            })
-            console.log("this is i in this forloop of all comments in the post but really it's the length of the results from looking up all id's of the comments on a post")
-            console.log(i)
-            console.log("this is the indexOf search for the newCommentPost id in post.comments.data")
-            console.log(post.comments.data.indexOf(newCommentPost.fbData.id))
-            console.log("and this is the id of the newComment")
-            console.log(newCommentPost.fbData.id)
+                    if (err) {
+                        console.error("there was an error saving the newCommentPost with id: " + newCommentPost.fbData.id)
+                        console.error(err)
+                        newCommentPost.save(err => {
+                            if (err) {
+                                console.error("there was an error saving the newCommentPost with id: " + newCommentPost.fbData.id)
+                                console.error(err)
+                            } else {
+                                console.log("successfully saved the following newCommentPost")
+                                console.log(newCommentPost)
+                            }
+                        })
+                    } else {
+                        console.log("successfully saved the following newCommentPost")
+                        console.log(newCommentPost)
+                    }
+                })
+                // console.log("this is i in this forloop of all comments in the post but really it's the length of the results from looking up all id's of the comments on a post")
+                // console.log(i)
+                // console.log("this is the indexOf search for the newCommentPost id in post.comments.data")
+                // console.log(post.comments.data.indexOf(newCommentPost.fbData.id))
+                // console.log("and this is the id of the newComment")
+                // console.log(newCommentPost.fbData.id)
             if (post.comments.data.indexOf(newCommentPost.fbData.id) < 0) {
-                console.log("this is the post we're inserting the comments into")
-                console.log(post.fbData)
-                console.log(post.comments)
-                console.log("the id of the comment we want to add was not yet in the post comments list of ids")
+                // console.log("this is the post we're inserting the comments into")
+                // console.log(post.fbData)
+                // console.log(post.comments)
+                // console.log("the id of the comment we want to add was not yet in the post comments list of ids")
                 post.comments.data.push(newCommentPost.fbData.id)
                 post.save(err => {
                     if (err) {
@@ -435,8 +445,8 @@ function recursiveSaveAndUpdatePosts(vars) {
     }
     if (i < json.data.length) {
         if (logging) {
-            console.log("this is the post we're going to try and store storing: ")
-            console.log(json.data[i]);
+            // console.log("this is the post we're going to try and store storing: ")
+            // console.log(json.data[i]);
         }
         postModel.findOne({
             "fbData.id": json.data[i].id
@@ -514,7 +524,7 @@ function recursiveSaveAndUpdatePosts(vars) {
                 // MAKE A NEW POST OBJECT
                 var newPost = new postModel({
                         fbData: json.data[i],
-                        type: "fb",
+                        type: "fbPost",
                         lastUpdated: json.data[i].updated_time,
                         realm: realm,
                         id: json.data[i].id
