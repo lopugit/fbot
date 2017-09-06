@@ -5,7 +5,10 @@ path = require('path')
 step = require('step')
 http = require('http')
 https = require('https')
+    // limit = require('simple-rate-limiter')
+    // request = limit(require('request-promise')).to('20').per(3000)
 request = require('request-promise')
+quota = require('quota')
 mongoose = require('mongoose')
 Step = require('step')
 Promise = require('bluebird')
@@ -39,6 +42,227 @@ arbCount = 0
 arbTotalCount = 0
 uniqueCommenters = []
 
+var manager = new quota.Manager({
+    backoff: 'timeout'
+});
+
+// 10 new requests per second
+manager.addRule({
+    name: 'main',
+    limit: 5,
+    window: 1000,
+    throttling: 'unlimited',
+    queueing: 'fifo',
+    resource: 'requests'
+});
+
+var quotaServer = new quota.Server();
+quotaServer.addManager('custom', manager);
+
+var quotaClient = new quota.Client(quotaServer);
+
+var requestThrottled = function(options) {
+    return new Promise((resolve, reject) => {
+        var _grant;
+        quotaClient.requestQuota('custom', {}, { requests: 1 }, {
+                maxWait: 10000000 // Each request will be queued for 60 seconds and discarded if it didn't get a slot to be executed until then
+            })
+            .then(function(grant) {
+                _grant = grant;
+                return request(options).then(function(body, error) {
+                    resolve(body, error)
+                    return
+                }).catch(function(err) {
+                    reject(err)
+                    return
+                })
+            })
+            .finally(function() {
+                if (_grant) {
+                    _grant.dismiss();
+                }
+            });
+
+    })
+}
+
+function saveEdgeData(vars, body, error) {
+    // body is the decompressed response body
+    // // console.log('server encoded the data as: ' + (response.headers['content-encoding'] || 'identity'))
+    var edge = vars.edge
+    fbId = vars.fbId
+    ourPostId = vars.ourPostId
+    accessToken = vars.accessToken
+    postModel = vars.postModel
+    realm = vars.realm
+    if (minimalFeedback) {
+        currentRequests -= 1
+        currentEdgeRequests -= 1
+    }
+    if (error) {
+        if (logging) {
+            console.error("there was an error requesting the edge %s, here is the error: ", edge)
+            console.error(error)
+            totalErrors += 1
+            totalEdgeErrors += 1
+            errors.push(error)
+            edgeErrors.push(error)
+        }
+        return
+    } else if (body) {
+        var json = JSON.parse(body)
+        if (logging) {
+            console.log("succesfully received edge %s from post %s", edge, fbId);
+            console.log(json)
+        }
+        if (minimalFeedback) {
+            console.log("Number of active requests %s", currentRequests)
+            console.log("Number of post requests %s", totalPostRequests)
+            console.log("Number of total requests %s", totalRequests)
+        }
+        // Check if there is any data to process
+        if (json.data) {
+            console.log("this is json.data when looking up edge: " + edge)
+            console.log(json.data)
+            if (json.data.length > 0) {
+                if (edge == "attachments") {
+                    if (json.data.type == "photo") {
+                        postModel.findOne({
+                            _id: ourPostId
+                        }).then((post, err) => {
+                            if (err) {
+                                console.error("there was an err when trying to find a post while saving attachment that was a photo")
+                            } else if (post) {
+                                console.log("this is json.data[0].media")
+                                console.log(json.data[0].media)
+                                post[edge].data.push(json.data[0].media)
+                                post.image = json.data[0].media.src
+                                post.save(function(err) {
+                                    if (err !== null) {
+                                        console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                        console.error(err)
+                                        console.log("trying to save post again after error")
+                                        post.save(function(err) {
+                                            if (err) {
+                                                console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                                console.error(err)
+                                            }
+                                        })
+
+                                    }
+                                })
+                            } else {
+                                console.error("we found no post when searching for id: " + ourPostId)
+
+                            }
+                        })
+
+                    }
+                    // If the attachment was not a photo we simply return, we will handle other attachments later :)
+                    else {
+                        return
+                    }
+                }
+                // If edge was not attachments, simply save edge as the returned data
+                else {
+                    console.log("now we look up the post with id: " + ourPostId)
+                    postModel.findOne({
+                        _id: ourPostId
+                    }).then((post, err) => {
+                        console.log("this is the returned or found post")
+                        console.log(post)
+                        if (err) {
+                            console.error("there was an error when trying to find a post while saving abitrary attachment data")
+                            console.error(err)
+                        } else if (post) {
+                            if (edge == "comments") {
+                                console.log("the edge we want is comments")
+                                if (json.data) {
+                                    console.log("there was json.data and this is it this is json.data")
+                                    console.log(json.data)
+                                    Promise.map(json.data, comment => {
+                                        console.log("this is the comment in json.data when mapping promises")
+                                        console.log(comment)
+                                        return postModel.findOne({
+                                            "fbData.id": comment.id
+                                        })
+                                    }).then(commentDocs => {
+                                        // console.log("this is all commentDocs")
+                                        // console.log(commentDocs)
+                                        if (commentDocs.length > 0) {
+                                            pushComments({
+                                                i: 0,
+                                                commentDocs: commentDocs,
+                                                post: post,
+                                                json: json
+                                            })
+                                        }
+
+
+                                    })
+                                } else {
+                                    return
+                                }
+                            } else {
+                                // console.log("this is the edge when it says cannot read the length of undefined")
+                                // console.log(edge)
+                                // console.log("and so this is post[edge].data")
+                                // console.log(post[edge].data)
+                                if (post[edge].data.length > 0) {
+                                    post[edge].history.push({
+                                        data: post[edge].data,
+                                        date: Date.now()
+                                    })
+                                    post[edge].data = json.data
+                                    post.save(err => {
+                                        if (err) {
+                                            console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                            console.error(err)
+                                            console.log("trying to save post again after error")
+                                            post.save(function(err) {
+                                                if (err) {
+                                                    console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                                    console.error(err)
+                                                }
+                                            })
+                                        }
+                                    })
+
+                                } else {
+                                    post[edge].data = json.data
+                                    post.save(function(err) {
+                                        if (err) {
+                                            console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                            console.error(err)
+                                            console.log("trying to save post again after error")
+                                            post.save(function(err) {
+                                                if (err) {
+                                                    console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                                    console.error(err)
+                                                }
+                                            })
+                                        }
+                                    })
+                                }
+
+                            }
+                        } else {
+                            console.error("we found no post when searching for id: " + ourPostId)
+                        }
+                    })
+                }
+            }
+            // If there was no data returned
+            else {
+                return
+            }
+
+        } else {
+            return
+        }
+    }
+}
+
 function getPostEdgeAndSave(vars) {
     var edge = vars.edge
     fbId = vars.fbId
@@ -62,7 +286,7 @@ function getPostEdgeAndSave(vars) {
         console.log("Number of total requests %s", totalRequests)
         console.log("Number of active requests %s", currentRequests)
     }
-    request({
+    var options = {
         method: 'GET',
         uri: url,
         gzip: true,
@@ -72,177 +296,38 @@ function getPostEdgeAndSave(vars) {
             // headers: {
             // 		connection: "close"
             // 	}
-    }, function(error, response, body) {
-        // body is the decompressed response body
-        // // console.log('server encoded the data as: ' + (response.headers['content-encoding'] || 'identity'))
-        if (minimalFeedback) {
-            currentRequests -= 1
-            currentEdgeRequests -= 1
-        }
-        if (error) {
-            if (logging) {
-                console.error("there was an error requesting the edge %s, here is the error: ", edge)
-                console.error(error)
-                totalErrors += 1
-                totalEdgeErrors += 1
-                errors.push(error)
-                edgeErrors.push(error)
-            }
-            return
-        } else if (body) {
-            var json = JSON.parse(body)
-            if (logging) {
-                console.log("succesfully received edge %s from post %s", edge, fbId);
-                console.log(json)
-            }
-            if (minimalFeedback) {
-                console.log("Number of active requests %s", currentRequests)
-                console.log("Number of post requests %s", totalPostRequests)
-                console.log("Number of total requests %s", totalRequests)
-            }
-            // Check if there is any data to process
-            if (json.data) {
-                console.log("this is json.data when looking up edge: " + edge)
-                console.log(json.data)
-                if (json.data.length > 0) {
-                    if (edge == "attachments") {
-                        if (json.data.type == "photo") {
-                            postModel.findOne({
-                                _id: ourPostId
-                            }).then((post, err) => {
-                                if (err) {
-                                    console.error("there was an err when trying to find a post while saving attachment that was a photo")
-                                } else if (post) {
-                                    console.log("this is json.data[0].media")
-                                    console.log(json.data[0].media)
-                                    post[edge].data.push(json.data[0].media)
-                                    post.image = json.data[0].media.src
-                                    post.save(function(err) {
-                                        if (err !== null) {
-                                            console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
-                                            console.error(err)
-                                            console.log("trying to save post again after error")
-                                            post.save(function(err) {
-                                                if (err) {
-                                                    console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
-                                                    console.error(err)
-                                                }
-                                            })
-
-                                        }
-                                    })
-                                } else {
-                                    console.error("we found no post when searching for id: " + ourPostId)
-
-                                }
-                            })
-
-                        }
-                        // If the attachment was not a photo we simply return, we will handle other attachments later :)
-                        else {
-                            return
-                        }
-                    }
-                    // If edge was not attachments, simply save edge as the returned data
-                    else {
-                        console.log("now we look up the post with id: " + ourPostId)
-                        postModel.findOne({
-                            _id: ourPostId
-                        }).then((post, err) => {
-                            console.log("this is the returned or found post")
-                            console.log(post)
-                            if (err) {
-                                console.error("there was an error when trying to find a post while saving abitrary attachment data")
-                                console.error(err)
-                            } else if (post) {
-                                if (edge == "comments") {
-                                    console.log("the edge we want is comments")
-                                    if (json.data) {
-                                        console.log("there was json.data and this is it this is json.data")
-                                        console.log(json.data)
-                                        Promise.map(json.data, comment => {
-                                            console.log("this is the comment in json.data when mapping promises")
-                                            console.log(comment)
-                                            return postModel.findOne({
-                                                "fbData.id": comment.id
-                                            })
-                                        }).then(commentDocs => {
-                                            // console.log("this is all commentDocs")
-                                            // console.log(commentDocs)
-                                            if (commentDocs.length > 0) {
-                                                pushComments({
-                                                    i: 0,
-                                                    commentDocs: commentDocs,
-                                                    post: post,
-                                                    json: json
-                                                })
-                                            }
-
-
-                                        })
-                                    } else {
-                                        return
-                                    }
-                                } else {
-                                    // console.log("this is the edge when it says cannot read the length of undefined")
-                                    // console.log(edge)
-                                    // console.log("and so this is post[edge].data")
-                                    // console.log(post[edge].data)
-                                    if (post[edge].data.length > 0) {
-                                        post[edge].history.push({
-                                            data: post[edge].data,
-                                            date: Date.now()
-                                        })
-                                        post[edge].data = json.data
-                                        post.save(err => {
-                                            if (err) {
-                                                console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
-                                                console.error(err)
-                                                console.log("trying to save post again after error")
-                                                post.save(function(err) {
-                                                    if (err) {
-                                                        console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
-                                                        console.error(err)
-                                                    }
-                                                })
-                                            }
-                                        })
-
-                                    } else {
-                                        post[edge].data = json.data
-                                        post.save(function(err) {
-                                            if (err) {
-                                                console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
-                                                console.error(err)
-                                                console.log("trying to save post again after error")
-                                                post.save(function(err) {
-                                                    if (err) {
-                                                        console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
-                                                        console.error(err)
-                                                    }
-                                                })
-                                            }
-                                        })
-                                    }
-
-                                }
-                            } else {
-                                console.error("we found no post when searching for id: " + ourPostId)
-                            }
-                        })
-                    }
-                }
-                // If there was no data returned
-                else {
-                    return
-                }
-
-            } else {
-                return
-            }
-        }
-    })
+    }
+    requestThrottled(options)
+        .then(function(body, error) {
+            saveEdgeData(vars, body, error)
+        })
+        .catch(function(err) {
+            console.error("there was an error looking up the edge ")
+            console.error(err)
+        })
+        // request({
+        //         method: 'GET',
+        //         uri: url,
+        //         gzip: true,
+        //         timeout: 0,
+        //         forever: true
+        //             // ,
+        //             // headers: {
+        //             // 		connection: "close"
+        //             // 	}
+        //     })
+        //     .then(saveEdgeData(body, error))
+        //     .catch(err => {
+        //         console.error("there was an error looking up the edge " + edge + " for post " + ourPostId)
+        //         console.error(err)
+        //     })
 }
+
+function postEdgeRequestError(err) {
+    console.error("there was an error looking up the edge ")
+    console.error(err)
+}
+
 
 function pushComments(vars) {
     var i = vars.i
@@ -310,9 +395,9 @@ function pushComments(vars) {
                         }
                     })
                 }
-                for (edge in postEdges) {
+                for (commentEdge in conf.commentEdges) {
                     getPostEdgeAndSave({
-                        edge: postEdges[edge],
+                        edge: conf.commentEdges[commentEdge],
                         fbId: commentDocs[i].fbData.id,
                         ourPostId: commentDocs[i]._id,
                         accessToken: accessToken,
@@ -418,9 +503,9 @@ function pushComments(vars) {
 
                     }
                 })
-                for (edge in postEdges) {
+                for (commentEdge in conf.commentEdges) {
                     getPostEdgeAndSave({
-                        edge: postEdges[edge],
+                        edge: conf.commentEdges[commentEdge],
                         fbId: newCommentPost.fbData.id,
                         ourPostId: newCommentPost._id,
                         accessToken: accessToken,
@@ -583,6 +668,83 @@ function recursiveSaveAndUpdatePosts(vars) {
     }
 }
 
+function savePostData(vars, body, error) {
+    var page = vars.page
+    accessToken = vars.accessToken
+    postModel = vars.postModel
+    groupName = vars.groupName
+    postEdges = vars.postEdges
+    console.log(error)
+    console.log(body)
+        // body is the decompressed response body
+        // // console.log('server encoded the data as: ' + (response.headers['content-encoding'] || 'identity'))
+    if (minimalFeedback) {
+        currentRequests -= 1
+        currentPostRequests -= 1
+    }
+
+    if (error) {
+        if (logging) {
+            console.error("there was an error, here it is: ")
+            console.error(error)
+            totalErrors += 1
+            totalPostErrors += 1
+            errors.push(error)
+            postErrors.push(error)
+        }
+        console.error("there was an error in the http request for page data: ")
+        console.error(error)
+        return
+    } else if (body) {
+        console.log("we got a body response")
+        console.log(body)
+        var json = JSON.parse(body)
+        if (logging) {
+            console.log("succesfully received posts");
+            if (json.hasOwnProperty("paging")) {
+                console.log("Here is the next page: \n%s \nand previous page: \n%s", json.paging.next, json.paging.previous)
+            }
+        }
+        if (minimalFeedback) {
+            console.log("Number of active requests %s", currentRequests)
+            console.log("Number of total post requests %s", totalPostRequests)
+            console.log("Number of total requests %s", totalRequests)
+        }
+        // Check if the returned data has any data in it (posts, events, etc..)
+        if (json.data) {
+            if (json.hasOwnProperty("paging")) {
+                var newLog = new log({
+                    type: groupName + "GroupPostsPagingUrl",
+                    data: json.paging.previous
+                })
+                newLog.save(err => {
+                    if (err) {
+                        console.error("there was an error saving the latest page log")
+                        console.error(err)
+                    }
+                })
+            }
+
+            if (json.data.length > 0) {
+                recursiveSaveAndUpdatePosts({
+                    i: 0,
+                    postModel: postModel,
+                    json: json,
+                    callback: requestPosts,
+                    realm: groupName,
+                    postEdges: postEdges
+                })
+            }
+            // If there was no data it means we have reached the end of the group and can stop trauling
+            else {
+                return;
+            }
+        } else {
+            return
+        }
+    }
+}
+
 function requestPosts(vars) {
     var page = vars.page
     accessToken = vars.accessToken
@@ -603,84 +765,50 @@ function requestPosts(vars) {
         console.log("this is the current page: ")
         console.log(page)
     }
-    request({
+    var options = {
         method: 'GET',
         uri: page,
         gzip: true,
         timeout: 0,
         forever: true
-            // ,
-            // headers: {
-            // 		connection: "close"
-            //   }
-    }, function(error, response, body) {
-        // body is the decompressed response body
-        // // console.log('server encoded the data as: ' + (response.headers['content-encoding'] || 'identity'))
-        if (minimalFeedback) {
-            currentRequests -= 1
-            currentPostRequests -= 1
-        }
-
-        if (error) {
-            if (logging) {
-                console.error("there was an error, here it is: ")
-                console.error(error)
-                totalErrors += 1
-                totalPostErrors += 1
-                errors.push(error)
-                postErrors.push(error)
-            }
-            console.error("there was an error in the http request for page data: ")
-            console.error(error)
-            return
-        } else if (body) {
-            var json = JSON.parse(body)
-            if (logging) {
-                console.log("succesfully received posts");
-                if (json.hasOwnProperty("paging")) {
-                    console.log("Here is the next page: \n%s \nand previous page: \n%s", json.paging.next, json.paging.previous)
-                }
-            }
-            if (minimalFeedback) {
-                console.log("Number of active requests %s", currentRequests)
-                console.log("Number of total post requests %s", totalPostRequests)
-                console.log("Number of total requests %s", totalRequests)
-            }
-            // Check if the returned data has any data in it (posts, events, etc..)
-            if (json.data) {
-                if (json.hasOwnProperty("paging")) {
-                    var newLog = new log({
-                        type: groupName + "GroupPostsPagingUrl",
-                        data: json.paging.previous
-                    })
-                    newLog.save(err => {
-                        if (err) {
-                            console.error("there was an error saving the latest page log")
-                            console.error(err)
-                        }
-                    })
-                }
-
-                if (json.data.length > 0) {
-                    recursiveSaveAndUpdatePosts({
-                        i: 0,
-                        postModel: postModel,
-                        json: json,
-                        callback: requestPosts,
-                        realm: groupName,
-                        postEdges: postEdges
-                    })
-                }
-                // If there was no data it means we have reached the end of the group and can stop trauling
-                else {
-                    return;
-                }
-            } else {
-                return
-            }
-        }
-    })
+            //             // ,
+            //             // headers: {
+            //             // 		connection: "close"
+            //             //   }
+    }
+    requestThrottled(options)
+        .then(function(body, error) {
+            savePostData(vars, body, error)
+        })
+        .catch(function(err) {
+            postRequestError(err)
+        })
+        // request({
+        //         method: 'GET',
+        //         uri: page,
+        //         gzip: true,
+        //         timeout: 0,
+        //         forever: true
+        //             // ,
+        //             // headers: {
+        //             // 		connection: "close"
+        //             //   }
+        //     })
+        //     .then(function(idk) {
+        //         console.log(idk)
+        //     })
+        //     .catch((err) => {
+        //         console.error("there was an error requesting the posts from page " + page)
+        //         console.error(err)
+        //     })
 }
+
+function postRequestError(err) {
+    console.error("there was an error requesting the posts from page")
+    console.error(err)
+}
+
+
 
 function cloneGroup(vars) {
     console.log("cloning group: " + vars.groupId)
