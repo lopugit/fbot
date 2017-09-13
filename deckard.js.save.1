@@ -7,17 +7,17 @@ http = require('http')
 https = require('https')
     // limit = require('simple-rate-limiter')
     // request = limit(require('request-promise')).to('20').per(3000)
+kue = require('kue')
 request = require('request-promise')
-pLimit = require('promise-limit')
 quota = require('quota')
 mongoose = require('mongoose')
 Step = require('step')
 Promise = require('bluebird')
 app.set('view engine', 'pug')
 app.locals.basedir = path.join(__dirname, 'views')
+var jobs = kue.createQueue()
     // FB NODE Packages in order of version number
-var postRequestLimiter = pLimit(10)
-var edgeRequestLimiter = pLimit(10)
+
 var post = require('./models/post')
 var log = require('./models/logs')
 
@@ -65,12 +65,12 @@ var quotaClient = new quota.Client(quotaServer);
 
 var requestThrottled = function(options) {
     return new Promise((resolve, reject) => {
-        //var _grant;
-        //quotaClient.requestQuota('custom', {}, { requests: 1 }, {
-          //      maxWait: 10000000 // Each request will be queued for 60 seconds and discarded if it didn't get a slot to be executed until then
-            //})
-            //.then(function(grant) {
-              //  _grant = grant;
+        var _grant;
+        quotaClient.requestQuota('custom', {}, { requests: 1 }, {
+                maxWait: 10000000 // Each request will be queued for 60 seconds and discarded if it didn't get a slot to be executed until then
+            })
+            .then(function(grant) {
+                _grant = grant;
                 return request(options).then(function(body, error) {
                     resolve(body, error)
                     return
@@ -78,12 +78,12 @@ var requestThrottled = function(options) {
                     reject(err)
                     return
                 })
-            //})
-            //.finally(function() {
-              //  if (_grant) {
-                //    _grant.dismiss();
-                //}
-           // });
+            })
+            .finally(function() {
+                if (_grant) {
+                    _grant.dismiss();
+                }
+            });
 
     })
 }
@@ -299,7 +299,7 @@ function getPostEdgeAndSave(vars) {
             // 		connection: "close"
             // 	}
     }
-    edgeRequestLimiter(()=>requestThrottled(options))
+    requestThrottled(options)
         .then(function(body, error) {
             saveEdgeData(vars, body, error)
         })
@@ -778,7 +778,7 @@ function requestPosts(vars) {
             //             // 		connection: "close"
             //             //   }
     }
-    postRequestLimiter(()=>requestThrottled(options))
+    requestThrottled(options)
         .then(function(body, error) {
             savePostData(vars, body, error)
         })
