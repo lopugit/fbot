@@ -299,7 +299,7 @@ function getPostEdgeAndSave(vars) {
             // 		connection: "close"
             // 	}
     }
-    edgeRequestLimiter(()=>requestThrottled(options))
+    edgeRequestLimiter(()=>{return requestThrottled(options)})
         .then(function(body, error) {
             saveEdgeData(vars, body, error)
         })
@@ -436,11 +436,12 @@ function pushComments(vars) {
                     pushComments(vars)
                 }
             }
-        } else {
+        } else if(json.data[i].length > 0){
             console.log("this is the json.data[i] data when saving a newCommentPost")
             console.log(json.data[i])
             console.log("there was no post document for the looked up post, so we're saving a new one, it's really a comment")
-            var newCommentPost = new postModel({
+
+		var newCommentPost = new postModel({
                     fbData: json.data[i],
                     realm: realm,
                     id: json.data[i].id,
@@ -516,7 +517,7 @@ function pushComments(vars) {
                     })
                 }
             }
-        }
+	}
     }
 }
 
@@ -778,7 +779,7 @@ function requestPosts(vars) {
             //             // 		connection: "close"
             //             //   }
     }
-    postRequestLimiter(()=>requestThrottled(options))
+    postRequestLimiter(()=>{return requestThrottled(options)})
         .then(function(body, error) {
             savePostData(vars, body, error)
         })
