@@ -95,21 +95,23 @@ function requestPostsAndSave(vars) {
         requestLog.dataObj.totalRequests.value += 1
         console.log("requestLog in if logging")
         console.log(requestLog)
-        requestLog.save(err => {
-            if (!err) {
-                return
-            } else {
-                requestLog.dataObj.totalErrors.list.push(err)
-                requestLog.save(err => {
-                    if (!err) {
-                        return
-                    } else {
-                        console.error("there was another error")
-                        console.error(err)
-                    }
-                })
-            }
-        })
+        if(loggingSave){
+            requestLog.save(err => {
+                if (!err) {
+                    return
+                } else {
+                    requestLog.dataObj.totalErrors.list.push(err)
+                    requestLog.save(err => {
+                        if (!err) {
+                            return
+                        } else {
+                            console.error("there was another error")
+                            console.error(err)
+                        }
+                    })
+                }
+            })
+        }
     }
     if (minimalFeedback) {
         console.log("total requests %s", requestLog.dataObj.totalRequests.value)
@@ -140,21 +142,23 @@ function requestPostsAndSave(vars) {
                 requestLog.dataObj.currentRequests.value -= 1
                 console.log("requestLog")
                 console.log(requestLog)
-                requestLog.save(err => {
-                    if (!err) {
-                        return
-                    } else {
-                        requestLog.dataObj.totalErrors.list.push(err)
-                        requestLog.save(err => {
-                            if (!err) {
-                                return
-                            } else {
-                                console.error("there was another error")
-                                console.error(err)
-                            }
-                        })
-                    }
-                })
+                if(loggingSave){
+                    requestLog.save(err => {
+                        if (!err) {
+                            return
+                        } else {
+                            requestLog.dataObj.totalErrors.list.push(err)
+                            requestLog.save(err => {
+                                if (!err) {
+                                    return
+                                } else {
+                                    console.error("there was another error")
+                                    console.error(err)
+                                }
+                            })
+                        }
+                    })
+                }
             }
             savePostData(vars, body, error)
         })
@@ -165,21 +169,23 @@ function requestPostsAndSave(vars) {
                 requestLog.dataObj.currentRequests.value -= 1
                 console.log("requestLog")
                 console.log(requestLog)
-                requestLog.save(err => {
-                    if (!err) {
-                        return
-                    } else {
-                        requestLog.dataObj.totalErrors.list.push(err)
-                        requestLog.save(err => {
-                            if (!err) {
-                                return
-                            } else {
-                                console.error("there was another error")
-                                console.error(err)
-                            }
-                        })
-                    }
-                })
+                if(loggingSave){
+                    requestLog.save(err => {
+                        if (!err) {
+                            return
+                        } else {
+                            requestLog.dataObj.totalErrors.list.push(err)
+                            requestLog.save(err => {
+                                if (!err) {
+                                    return
+                                } else {
+                                    console.error("there was another error")
+                                    console.error(err)
+                                }
+                            })
+                        }
+                    })
+                }
             }
             console.error("there was an error requesting posts")
             console.error(err)
@@ -202,21 +208,23 @@ function savePostData(vars, body, error) {
             requestLog.dataObj.totalPostErrors.list.push(error)
             console.log("requestLog")
             console.log(requestLog)
-            requestLog.save(err => {
-                if (!err) {
-                    return
-                } else {
-                    requestLog.dataObj.totalErrors.list.push(err)
-                    requestLog.save(err => {
-                        if (!err) {
-                            return
-                        } else {
-                            console.error("there was another error")
-                            console.error(err)
-                        }
-                    })
-                }
-            })
+            if(loggingSave){
+                requestLog.save(err => {
+                    if (!err) {
+                        return
+                    } else {
+                        requestLog.dataObj.totalErrors.list.push(err)
+                        requestLog.save(err => {
+                            if (!err) {
+                                return
+                            } else {
+                                console.error("there was another error")
+                                console.error(err)
+                            }
+                        })
+                    }
+                })
+            }
         }
         console.error("there was an error in the http request for page data: ")
         console.error(error)
@@ -488,21 +496,23 @@ function requestEdgeAndSave(vars) {
         requestLog.dataObj.currentRequests.value += 1
         requestLog.dataObj.totalEdgeRequests.value += 1
         requestLog.dataObj.totalRequests.value += 1
-        requestLog.save(err => {
-            if (!err) {
-                return
-            } else {
-                requestLog.dataObj.totalErrors.list.push(err)
-                requestLog.save(err => {
+        if(loggingSave){
+            requestLog.save(err => {
                     if (!err) {
                         return
                     } else {
-                        console.error("there was another error")
-                        console.error(err)
+                        requestLog.dataObj.totalErrors.list.push(err)
+                        requestLog.save(err => {
+                            if (!err) {
+                                return
+                            } else {
+                                console.error("there was another error")
+                                console.error(err)
+                            }
+                        })
                     }
-                })
-            }
-        })
+                })            
+        }
     }
     if (minimalFeedback) {
         console.log("Number of total requests %s", requestLog.dataObj.totalRequests.value)
@@ -528,21 +538,23 @@ function requestEdgeAndSave(vars) {
                 requestLog.date = Date.now()
                 requestLog.dataObj.currentEdgeRequests.value -= 1
                 requestLog.dataObj.currentRequests.value -= 1
-                requestLog.save(err => {
-                    if (!err) {
-                        return
-                    } else {
-                        requestLog.dataObj.totalErrors.list.push(err)
-                        requestLog.save(err => {
-                            if (!err) {
-                                return
-                            } else {
-                                console.error("there was another error")
-                                console.error(err)
-                            }
-                        })
-                    }
-                })
+                if(loggingSave){
+                    requestLog.save(err => {
+                        if (!err) {
+                            return
+                        } else {
+                            requestLog.dataObj.totalErrors.list.push(err)
+                            requestLog.save(err => {
+                                if (!err) {
+                                    return
+                                } else {
+                                    console.error("there was another error")
+                                    console.error(err)
+                                }
+                            })
+                        }
+                    })
+                }
             }
             saveEdgeData(vars, body, error)
         })
@@ -552,21 +564,23 @@ function requestEdgeAndSave(vars) {
                 requestLog.dataObj.currentEdgeRequests.value -= 1
                 requestLog.dataObj.currentRequests.value -= 1
                 requestLog.dataObj.totalEdgeErrors.list.push(err)
-                requestLog.save(err => {
-                    if (!err) {
-                        return
-                    } else {
-                        requestLog.dataObj.totalErrors.list.push(err)
-                        requestLog.save(err => {
-                            if (!err) {
-                                return
-                            } else {
-                                console.error("there was another error")
-                                console.error(err)
-                            }
-                        })
-                    }
-                })
+                if(loggingSave){
+                    requestLog.save(err => {
+                        if (!err) {
+                            return
+                        } else {
+                            requestLog.dataObj.totalErrors.list.push(err)
+                            requestLog.save(err => {
+                                if (!err) {
+                                    return
+                                } else {
+                                    console.error("there was another error")
+                                    console.error(err)
+                                }
+                            })
+                        }
+                    })
+                }
             }
             console.error("there was an error looking up the edge %s", edge)
             console.error(err)
@@ -590,21 +604,23 @@ function saveEdgeData(vars, body, error) {
             requestLog.date = Date.now()
             requestLog.dataObj.totalErrors.list.push(error)
             requestLog.dataObj.totalEdgeErrors.list.push(error)
-            requestLog.save(err => {
-                if (!err) {
-                    return
-                } else {
-                    requestLog.dataObj.totalErrors.list.push(err)
-                    requestLog.save(err => {
-                        if (!err) {
-                            return
-                        } else {
-                            console.error("there was another error")
-                            console.error(err)
-                        }
-                    })
-                }
-            })
+            if(loggingSave){
+                requestLog.save(err => {
+                    if (!err) {
+                        return
+                    } else {
+                        requestLog.dataObj.totalErrors.list.push(err)
+                        requestLog.save(err => {
+                            if (!err) {
+                                return
+                            } else {
+                                console.error("there was another error")
+                                console.error(err)
+                            }
+                        })
+                    }
+                })
+            }
         }
         return
     } else if (body) {
@@ -1043,8 +1059,9 @@ function limitedList(length) {
 }
 
 
-var logging = false
-var minimalFeedback = false
+var logging = true
+var loggingSave = false
+var minimalFeedback = true
 
 cloneGroup({
     groupId: '154420241260828',
