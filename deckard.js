@@ -93,8 +93,6 @@ function requestPostsAndSave(vars) {
         requestLog.dataObj.currentRequests.value += 1
         requestLog.dataObj.totalPostRequests.value += 1
         requestLog.dataObj.totalRequests.value += 1
-        console.log("requestLog in if logging")
-        console.log(requestLog)
         if (loggingSave) {
             requestLog.save(err => {
                 if (!err) {
@@ -141,8 +139,6 @@ function requestPostsAndSave(vars) {
                 requestLog.date = Date.now()
                 requestLog.dataObj.currentPostRequests.value -= 1
                 requestLog.dataObj.currentRequests.value -= 1
-                console.log("requestLog")
-                console.log(requestLog)
                 if (loggingSave) {
                     requestLog.save(err => {
                         if (!err) {
@@ -168,8 +164,6 @@ function requestPostsAndSave(vars) {
                 requestLog.date = Date.now()
                 requestLog.dataObj.currentPostRequests.value -= 1
                 requestLog.dataObj.currentRequests.value -= 1
-                console.log("requestLog")
-                console.log(requestLog)
                 if (loggingSave) {
                     requestLog.save(err => {
                         if (!err) {
@@ -207,8 +201,6 @@ function savePostData(vars, body, error) {
             requestLog.date = Date.now()
             requestLog.dataObj.totalErrors.list.push(error)
             requestLog.dataObj.totalPostErrors.list.push(error)
-            console.log("requestLog")
-            console.log(requestLog)
             if (loggingSave) {
                 requestLog.save(err => {
                     if (!err) {
@@ -774,12 +766,7 @@ function handleComments(vars) {
     if (i >= max - 1) {
         return
     } else {
-        console.log('we"re inside pushCommments')
-        console.log(commentDocs)
-        console.log("json.data[i].length")
-        console.log(json.data[i].length)
         if (commentDocs[i]) {
-            console.log("the commentPost already existed")
             if (commentDocs[i].fbData.message !== json.data[i].message) {
                 let history = new limitedList(5)
                 for (let historical of commentDocs[i].history) {
@@ -798,25 +785,15 @@ function handleComments(vars) {
                                 console.error("there was an error saving the post that is really a comment")
                                 console.error(err)
                             } else {
-                                console.log("successfully saved the following commentDocs[i]")
-                                console.log(commentDocs[i])
                                 vars.i += 1
                                 handleComments(vars)
                             }
                         })
                     } else {
-                        console.log("successfully saved the following commentDocs[i]")
-                        console.log(commentDocs[i])
                         vars.i += 1
                         handleComments(vars)
                     }
                 })
-                // console.log("this is i in the for loop of commentDocs.length")
-                // console.log(i)
-                // console.log("this is the indexOf search for the newCommentPost id in post.comments.data")
-                // console.log(post.comments.data.indexOf(commentDocs[i].fbData.id))
-                // console.log("and this is the id of the newComment")
-                // console.log(commentDocs[i].fbData.id)
                 if (post.comments.data.indexOf(commentDocs[i].fbData.id) < 0) {
                     post.comments.data.push(commentDocs[i].fbData.id)
                     post.save(err => {
@@ -834,8 +811,6 @@ function handleComments(vars) {
                                 }
                             })
                         } else {
-                            console.log("successfully saved the post with updated comments list")
-                            console.log(post)
                             vars.i += 1
                             handleComments(vars)
                         }
@@ -869,8 +844,6 @@ function handleComments(vars) {
                                 }
                             })
                         } else {
-                            console.log("successfully saved the post with updated comments list")
-                            console.log(post)
                             vars.i += 1
                             handleComments(vars)
                         }
@@ -881,10 +854,6 @@ function handleComments(vars) {
                 }
             }
         } else if (json.data[i]) {
-            console.log("this is the json.data[i] data when saving a newCommentPost")
-            console.log(json.data[i])
-            console.log("there was no post document for the looked up post, so we're saving a new one, it's really a comment")
-
             var newCommentPost = new postModel({
                 fbData: json.data[i],
                 realm: realm,
@@ -892,8 +861,6 @@ function handleComments(vars) {
                 lastUpdated: json.data[i].created_time,
                 type: "fbComment"
             })
-            // console.log("this is the id of the new comment we're saving as a post: ")
-            // console.log(newCommentPost.fbData.id)
             newCommentPost.save(err => {
                 if (err) {
                     console.error("there was an error saving the newCommentPost with id: " + newCommentPost.fbData.id)
@@ -903,26 +870,12 @@ function handleComments(vars) {
                             console.error("there was an error saving the newCommentPost with id: " + newCommentPost.fbData.id)
                             console.error(err)
                         } else {
-                            console.log("successfully saved the following newCommentPost")
-                            console.log(newCommentPost)
                         }
                     })
                 } else {
-                    console.log("successfully saved the following newCommentPost")
-                    console.log(newCommentPost)
                 }
             })
-            // console.log("this is i in this forloop of all comments in the post but really it's the length of the results from looking up all id's of the comments on a post")
-            // console.log(i)
-            // console.log("this is the indexOf search for the newCommentPost id in post.comments.data")
-            // console.log(post.comments.data.indexOf(newCommentPost.fbData.id))
-            // console.log("and this is the id of the newComment")
-            // console.log(newCommentPost.fbData.id)
             if (post.comments.data.indexOf(newCommentPost.fbData.id) < 0) {
-                // console.log("this is the post we're inserting the comments into")
-                // console.log(post.fbData)
-                // console.log(post.comments)
-                // console.log("the id of the comment we want to add was not yet in the post comments list of ids")
                 post.comments.data.push(newCommentPost.fbData.id)
                 post.save(err => {
                     if (err) {
@@ -943,8 +896,6 @@ function handleComments(vars) {
 
                         })
                     } else {
-                        console.log("we saved the post with comments pushed, here's the post: ")
-                        console.log(post)
                         vars.i += 1
                         handleComments(vars)
 
