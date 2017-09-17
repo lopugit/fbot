@@ -95,7 +95,7 @@ function requestPostsAndSave(vars) {
         requestLog.dataObj.totalRequests.value += 1
         console.log("requestLog in if logging")
         console.log(requestLog)
-        if(loggingSave){
+        if (loggingSave) {
             requestLog.save(err => {
                 if (!err) {
                     return
@@ -132,6 +132,7 @@ function requestPostsAndSave(vars) {
         //             // 		connection: "close"
         //             //   }
     }
+    logOptions(options)
     postRequestLimiter(() => {
             return requestThrottled(options)
         })
@@ -142,7 +143,7 @@ function requestPostsAndSave(vars) {
                 requestLog.dataObj.currentRequests.value -= 1
                 console.log("requestLog")
                 console.log(requestLog)
-                if(loggingSave){
+                if (loggingSave) {
                     requestLog.save(err => {
                         if (!err) {
                             return
@@ -169,7 +170,7 @@ function requestPostsAndSave(vars) {
                 requestLog.dataObj.currentRequests.value -= 1
                 console.log("requestLog")
                 console.log(requestLog)
-                if(loggingSave){
+                if (loggingSave) {
                     requestLog.save(err => {
                         if (!err) {
                             return
@@ -208,7 +209,7 @@ function savePostData(vars, body, error) {
             requestLog.dataObj.totalPostErrors.list.push(error)
             console.log("requestLog")
             console.log(requestLog)
-            if(loggingSave){
+            if (loggingSave) {
                 requestLog.save(err => {
                     if (!err) {
                         return
@@ -307,7 +308,7 @@ function recursiveSaveAndUpdatePosts(vars) {
                 // IF THE RECEIVED POST UPDATE TIME DOES NOT MATCH THE STORED POSTS LAST UPDATED TIME WE REPLACE THE DATA AND SAVE THE HISTORY
                 if (post.fbData.updated_time !== json.data[i].updated_time) {
                     let history = new limitedList(5)
-                    for(let historical of post.history){
+                    for (let historical of post.history) {
                         history.push(historical)
                     }
                     history.push(post.fbData)
@@ -496,22 +497,22 @@ function requestEdgeAndSave(vars) {
         requestLog.dataObj.currentRequests.value += 1
         requestLog.dataObj.totalEdgeRequests.value += 1
         requestLog.dataObj.totalRequests.value += 1
-        if(loggingSave){
+        if (loggingSave) {
             requestLog.save(err => {
-                    if (!err) {
-                        return
-                    } else {
-                        requestLog.dataObj.totalErrors.list.push(err)
-                        requestLog.save(err => {
-                            if (!err) {
-                                return
-                            } else {
-                                console.error("there was another error")
-                                console.error(err)
-                            }
-                        })
-                    }
-                })            
+                if (!err) {
+                    return
+                } else {
+                    requestLog.dataObj.totalErrors.list.push(err)
+                    requestLog.save(err => {
+                        if (!err) {
+                            return
+                        } else {
+                            console.error("there was another error")
+                            console.error(err)
+                        }
+                    })
+                }
+            })
         }
     }
     if (minimalFeedback) {
@@ -530,6 +531,7 @@ function requestEdgeAndSave(vars) {
         // 		connection: "close"
         // 	}
     }
+    logOptions(options)
     edgeRequestLimiter(() => {
             return requestThrottled(options)
         })
@@ -538,7 +540,7 @@ function requestEdgeAndSave(vars) {
                 requestLog.date = Date.now()
                 requestLog.dataObj.currentEdgeRequests.value -= 1
                 requestLog.dataObj.currentRequests.value -= 1
-                if(loggingSave){
+                if (loggingSave) {
                     requestLog.save(err => {
                         if (!err) {
                             return
@@ -564,7 +566,7 @@ function requestEdgeAndSave(vars) {
                 requestLog.dataObj.currentEdgeRequests.value -= 1
                 requestLog.dataObj.currentRequests.value -= 1
                 requestLog.dataObj.totalEdgeErrors.list.push(err)
-                if(loggingSave){
+                if (loggingSave) {
                     requestLog.save(err => {
                         if (!err) {
                             return
@@ -604,7 +606,7 @@ function saveEdgeData(vars, body, error) {
             requestLog.date = Date.now()
             requestLog.dataObj.totalErrors.list.push(error)
             requestLog.dataObj.totalEdgeErrors.list.push(error)
-            if(loggingSave){
+            if (loggingSave) {
                 requestLog.save(err => {
                     if (!err) {
                         return
@@ -696,7 +698,7 @@ function saveEdgeData(vars, body, error) {
                     } else {
                         if (post[edge].data.length > 0) {
                             let history = new limitedList(5)
-                            for(let historical of post[edge].history){
+                            for (let historical of post[edge].history) {
                                 history.push(historical)
                             }
                             history.push({
@@ -780,7 +782,7 @@ function handleComments(vars) {
             console.log("the commentPost already existed")
             if (commentDocs[i].fbData.message !== json.data[i].message) {
                 let history = new limitedList(5)
-                for(let historical of commentDocs[i].history){
+                for (let historical of commentDocs[i].history) {
                     history.push(historical)
                 }
                 history.push(commentDocs[i].fbData)
@@ -1051,14 +1053,55 @@ function limitedList(length) {
         if (this.length >= length) {
             this.shift();
         }
-        return Array.prototype.push.apply(this,arguments);
+        return Array.prototype.push.apply(this, arguments);
     }
 
     return array;
 
 }
 
+function saveRecursively(args) {
+    /*
+        Expects @args
+        @arg name is some reference so we know what the error means
+        @arg model is a mongoose model
+        @arg i is the current count
+        @arg max is the max ammount of times we try to save
+    */
+    if (!args) {
+        let args = {}
+    }
+    if (!args.curCount) args.curCount = 0
+    if (args.curCount >= args.max) {
+        return
+    } else if (args.model) {
+        args.model.save(err => {
+            if (err) {
+                console.log("there was an error saving a model with name %s", args.name)
+                args.curCount += 1
+                saveRecursively(args)
+            } else {
+                console.log("successfully saved the model after %s attempts", args.curCount)
+            }
+        })
+    }
+}
 
+function logOptions(options) {
+    if (options) {
+        let optionLog = new log({
+            date: Date.now(),
+            type: 'optionLog',
+            dataObj: {
+                options: options
+            }
+        })
+        saveRecursively({
+            model: optionLog,
+            max: 6
+        })
+    }
+}
 var logging = true
 var loggingSave = false
 var minimalFeedback = true
