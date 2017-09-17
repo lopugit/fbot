@@ -16,8 +16,8 @@ Promise = require('bluebird')
 app.set('view engine', 'pug')
 app.locals.basedir = path.join(__dirname, 'views')
 // FB NODE Packages in order of version number
-var postRequestLimiter = pLimit(5)
-var edgeRequestLimiter = pLimit(15)
+var postRequestLimiter = pLimit(1)
+var edgeRequestLimiter = pLimit(2)
 var post = require('./models/post')
 var log = require('./models/logs')
 
