@@ -19,10 +19,12 @@ app.locals.basedir = path.join(__dirname, 'views')
 var postRequestLimiter = pLimit(5)
 var edgeRequestLimiter = pLimit(15)
 var post = require('./models/post')
+var postNew = require('./models/postNew')
+var resource = require('./models/resources')
 var log = require('./models/logs')
 
 mongoose.Promise = Promise
-var db = mongoose.createConnection("mongodb://localhost:27017/deckard")
+var db = mongoose.createConnection("mongodb://localhost:27017/node214")
 var conf = require('./conf/fbconf')
 
 // FB.setAccessToken(conf.appId+"|"+conf.appSecret)
@@ -385,7 +387,7 @@ function recursiveSaveAndUpdatePosts(vars) {
                         console.log("trying to save post again after error")
                         newPost.save(function (err) {
                             if (err) {
-                                console.error("there was an error when saving the edge data for edge " + edge + " to post " + ourPostId)
+                                console.error("there was an error when saving the post " + json.data[i].id)
                                 console.error(err)
                             }
                         })
@@ -869,11 +871,9 @@ function handleComments(vars) {
                         if (err) {
                             console.error("there was an error saving the newCommentPost with id: " + newCommentPost.fbData.id)
                             console.error(err)
-                        } else {
-                        }
+                        } else {}
                     })
-                } else {
-                }
+                } else {}
             })
             if (post.comments.data.indexOf(newCommentPost.fbData.id) < 0) {
                 post.comments.data.push(newCommentPost.fbData.id)
@@ -916,26 +916,34 @@ function handleComments(vars) {
     }
 }
 
-function addrealm(realm, model) {
-    var stream = model.find().cursor()
+function addrealm(realm, model, find) {
+    var stream = model.find(find).cursor()
+    let arbTotalCount = 0
     stream.on('data', function (doc) {
         arbTotalCount += 1
         console.log("this is the arbTotalCount: ")
         console.log(arbTotalCount)
-        if (loggingrealmUpdate) {
-            console.log(doc.realmList)
-        }
-        if (doc.realmList.indexOf(realm) < 0) {
-            doc.realmList.push(realm)
+        if (!doc.realms) {
+            doc.realms = []
+            doc.realms.push(realm)
             doc.save(function (err) {
                 if (err) {
                     console.error("there was an error pushing the realm into the realm list")
                     console.error(err)
+                } else {
+                    console.log("successfully saved new realm data")
                 }
             })
-        }
-        if (loggingrealmUpdate) {
-            console.log(doc.realmList)
+        } else if (doc.realms.indexOf(realm) < 0) {
+            doc.realms.push(realm)
+            doc.save(function (err) {
+                if (err) {
+                    console.error("there was an error pushing the realm into the realm list")
+                    console.error(err)
+                } else {
+                    console.log("successfully saved new realm data")
+                }
+            })
         }
 
     }).on('error', function (err) {
@@ -1016,7 +1024,7 @@ function saveRecursively(args) {
         Expects @args
         @arg name is some reference so we know what the error means
         @arg model is a mongoose model
-        @arg i is the current count
+        @arg curCount is the current count
         @arg max is the max ammount of times we try to save
     */
     if (!args) {
@@ -1053,21 +1061,380 @@ function logOptions(options) {
         })
     }
 }
-var logging = true
-var loggingSave = false
-var minimalFeedback = true
 
-cloneGroup({
-    groupId: '154420241260828',
-    accessToken: conf.accessToken(),
-    firstUrl: "https://graph.facebook.com/v2.8/154420241260828/feed?limit=5&access_token=" + conf.accessToken(),
-    postModel: post,
-    groupName: "philosophy",
-})
+function fixCommentIds(model, modelNew) {
 
-// addrealm("philosophy", post)
+    let stream = model.find().cursor()
+    arbTotalCount = 0
+    stream.on('data', (postDoc) => {
+        arbTotalCount += 1
+        console.log("this is the arbTotalCount: %s", arbTotalCount)
+        //use when comments.data is full of facebook id formats
+        Promise.map(postDoc.comments.data, commentId => {
+                // console.log("commentId")
+                // console.log(commentId)
+                return model.findOne({
+                    "fbData.id": commentId
+                })
+            })
+            .then(commentDocs => {
+                // console.log("commentDocs")
+                // console.log(commentDocs)
+                if (commentDocs.length > 0) {
+                    // postDoc.comments.history.push({data: postDoc.comments.data, date: Date.now()})
+                    // delete postDoc.comments.data
+                    postDoc.comments.data = []
+                    console.log("shouldn't comments.data be empty")
+                    console.log(postDoc.comments.data)
+                    let jsonPostDoc = postDoc.toJSON()
+                    let newPostDoc = new modelNew(jsonPostDoc)
+                    newPostDoc.comments.data = []
+                    console.log("newPostDoc")
+                    console.log(newPostDoc)
+                    for (comment of commentDocs) {
+                        // console.log("pushing this comment._id %s", comment._id)
+                        newPostDoc.comments.data.push(comment._id)
+                    }
+                    newPostDoc.save(err => {
+                        if (err) {
+                            console.error("there was an error pushing the realm into the realm list")
+                            console.error(err)
+                            console.error("trying to save again")
+                            newPostDoc.save(err => {
+                                if (err) {
+                                    console.error("there was an error pushing the realm into the realm list")
+                                    console.error(err)
+                                }
+                            })
+                        } else {
+                            console.log("successfully saved new schema post doc")
+                        }
+                    })
+                } else {
+                    let jsonPostDoc = postDoc.toJSON()
+                    let newPostDoc = new modelNew(jsonPostDoc)
+                    newPostDoc.save(err => {
+                        if (err) {
+                            console.error("there was an error pushing the realm into the realm list")
+                            console.error(err)
+                            console.error("trying to save again")
+                            newPostDoc.save(err => {
+                                if (err) {
+                                    console.error("there was an error pushing the realm into the realm list")
+                                    console.error(err)
+                                }
+                            })
+                        } else {
+                            console.log("successfully saved new schema post doc")
+                        }
+                    })
+                }
+            })
+        // else {
+        //     console.log(postDoc.comments.data.length)
+        //     console.log("postDoc.comments.data.length")
+        //     console.log(postDoc._id)
+        // }
+
+    }).on('error', function (err) {
+        console.error("there was an error in the stream")
+        console.error(err)
+    }).on('close', function () {
+        console.log("updated all posts")
+    })
+}
+
+function updateSchema(model) {
+    var stream = model.find().cursor()
+    let arbTotalCount = 0
+    let newModels = []
+    stream.on('data', function (doc) {
+        arbTotalCount += 1
+        console.log("this is the arbTotalCount: ")
+        console.log(arbTotalCount)
+        doc.remove()
+        let newDoc = new model(doc.toJSON())
+        newModels.push(newDoc)
+
+    }).on('error', function (err) {
+        console.error("there was an error in the stream")
+        console.error(err)
+    }).on('close', function () {
+        console.log("updated all posts")
+        newModels.forEach(newDoc => {
+            console.log("saving newDoc")
+            console.log(newDoc)
+            newDoc.save(function (err) {
+                if (err) {
+                    console.error("there was an error pushing the realm into the realm list")
+                    console.error(err)
+                } else {
+                    console.log("saved the new post successfully")
+
+                }
+            })
+        })
+    })
+}
+
+function convertToResource(postModel, resourceModel) {
+    let stream = postModel.find({
+        type: 'fbPost'
+    }).cursor()
+    arbTotalCount = 0
+    stream.on('data', (postDoc) => {
+        arbTotalCount += 1
+        console.log("this is the arbTotalCount: %s", arbTotalCount)
+        //use when comments.data is full of facebook id formats
+        let resource = ''
+        realm = ''
+        let newResource = new resourceModel({
+            description: postDoc.fbData.message,
+            resource: 'facebook post',
+            names: ['post'],
+            realms: ["facebook", 'posts', "all", "philosophy", "resources"],
+            properties: {
+                fbData: postDoc.fbData
+            },
+            source: 'https://www.facebook.com/groups/filosoph/'
+        })
+        for (let edge of conf.postEdges) {
+            convertAndSaveEdge(edge, postDoc, newResource, postModel, resourceModel)
+        }
+
+        // else {
+        //     console.log(postDoc.comments.data.length)
+        //     console.log("postDoc.comments.data.length")
+        //     console.log(postDoc._id)
+        // }
+
+    }).on('error', function (err) {
+        console.error("there was an error in the stream")
+        console.error(err)
+    }).on('close', function () {
+        console.log("updated all posts")
+    })
+}
+
+function convertAndSaveEdge(edge, postDoc, resourceDoc, postModel, resourceModel) {
+    if (edge == 'comments') {
+        if(postDoc.comments.data.length > 0){
+            Promise.map(postDoc.comments.data, commentId => {
+                    return postModel.findOne({
+                        "_id": commentId
+                    })
+                })
+                .then(commentDocs => {
+                    if (commentDocs.length > 0) {
+                        console.log(commentDocs)
+                        let newCommentInventory = new resourceModel({
+                            resource: 'facebook comments',
+                            names: ['inventory'],
+                            realms: ["facebook", 'posts', "all", "philosophy", "resources", "comments"],
+                            uniques: {
+                                resource: true
+                            },
+                            parents: [resourceDoc._id]
+                        })
+                        resourceDoc.resources.push(newCommentInventory._id)
+                        for (comment of commentDocs) {
+                            if(comment){
+                                let newComment = new resourceModel({
+                                    resource: 'facebook comment',
+                                    description: comment.fbData.message,
+                                    realms: ["facebook", 'posts', "all", "philosophy", "resources", "comments"],
+                                    parents: [resourceDoc._id, newCommentInventory._id],
+                                    properties: {
+                                        fbData: comment.fbData
+                                    },
+                                    source: 'https://www.facebook.com/groups/filosoph/',
+        
+                                })
+                                newCommentInventory.resources.push(newComment._id)
+                                for (let edge of conf.commentEdges) {
+                                    convertAndSaveEdge(edge, comment, newComment, postModel, resourceModel)
+                                }
+                                newComment.save(err => {
+                                    if (err) {
+                                        console.error(err)
+                                        console.error("there was an error saving the new comment resource")
+                                        console.error("trying to save again")
+                                        newComment.save(err => {
+                                            if (err) {
+                                                console.error("there was an error saving the new comment resource")
+                                                console.error(err)
+                                            }
+                                        })
+                                    } else {
+                                        console.log("successfully saved new comment resource doc")
+                                    }
+                                })
+                            }
+                        }
+                        newCommentInventory.save(err => {
+                            if (err) {
+                                console.error(err)
+                                console.error("there was an error saving the new commentInventory")
+                                console.error("trying to save again")
+                                newCommentInventory.save(err => {
+                                    if (err) {
+                                        console.error("there was an error saving the new commentInventory")
+                                        console.error(err)
+                                    }
+                                })
+                            } else {
+                                console.error("successfully saved the new commentInventory")
+                            }
+                        })
+                        resourceDoc.save(err => {
+                            if (err) {
+                                console.error(err)
+                                console.error("there was an error saving the new resourceDoc that was a comment")
+                                console.error("trying to save again")
+                                resourceDoc.save(err => {
+                                    if (err) {
+                                        console.error("there was an error saving the new resourceDoc that was a comment")
+                                        console.error(err)
+                                    }
+                                })
+                            } else {
+                                console.error("successfully saved the new resourceDoc that was a comment")
+                            }
+                        })
+                    } else {
+                        resourceDoc.save(err => {
+                            if (err) {
+                                console.error(err)
+                                console.error("there was an error saving the new resourceDoc that was a comment")
+                                console.error("trying to save again")
+                                resourceDoc.save(err => {
+                                    if (err) {
+                                        console.error("there was an error saving the new resourceDoc that was a comment")
+                                        console.error(err)
+                                    }
+                                })
+                            } else {
+                                console.error("successfully saved the new resourceDoc that was a comment")
+                            }
+                        })
+                    }
+                })
+        }
+    } else {
+        if(postDoc[edge].data.length > 0){
+            let newEdgeResourceInventory = new resourceModel({
+                resource: "facebook " + edge,
+                names: ['inventory'],
+                realms: ["facebook", "all", "philosophy", "resources", edge],
+                source: 'https://www.facebook.com/groups/filosoph/',
+                parents: [resourceDoc._id],
+                uniques: {
+                    resource: true
+                }
+            })
+            console.log('postDoc')
+            console.log(postDoc)
+            console.log('edge')
+            console.log(edge)
+            for (let data of postDoc[edge].data) {
+                let newEdgeResource = new resourceModel({
+                    resource: "facebook " + edge.slice(0, -1),
+                    names: ['inventory'],
+                    realms: ["facebook", "all", "philosophy", "resources", edge],
+                    source: 'https://www.facebook.com/groups/filosoph/',
+                    properties: {
+                        fbData: data
+                    },
+                    parents: [resourceDoc._id, newEdgeResourceInventory._id]
+                })
+                newEdgeResourceInventory.resources.push(newEdgeResource._id)
+                newEdgeResource.save(err => {
+                    if (err) {
+                        console.error(err)
+                        console.error("there was an error saving the new newEdgeResource")
+                        console.error("trying to save again")
+                        newEdgeResource.save(err => {
+                            if (err) {
+                                console.error("there was an error saving the new newEdgeResource")
+                                console.error(err)
+                            }
+                        })
+                    } else {
+                        console.error("successfully saved the new newEdgeResource")
+                    }
+                })
+            }
+            newEdgeResourceInventory.save(err => {
+                if (err) {
+                    console.error(err)
+                    console.error("there was an error saving the new newEdgeResourceInventory")
+                    console.error("trying to save again")
+                    newEdgeResourceInventory.save(err => {
+                        if (err) {
+                            console.error("there was an error saving the new newEdgeResourceInventory")
+                            console.error(err)
+                        }
+                    })
+                } else {
+                    console.error("successfully saved the new newEdgeResourceInventory")
+                }
+            })
+            resourceDoc.save(err => {
+                if (err) {
+                    console.error(err)
+                    console.error("there was an error saving the new resourceDoc that was edge data")
+                    console.error("trying to save again")
+                    resourceDoc.save(err => {
+                        if (err) {
+                            console.error("there was an error saving the new resourceDoc that was edge data")
+                            console.error(err)
+                        }
+                    })
+                } else {
+                    console.error("successfully saved the new resourceDoc that was edge data")
+                }
+            })
+        }
+    }
+}
+
+function addOwner(resourceModel) {
+    let stream = resourceModel.find({
+        resource: {$exists: true}
+    }).cursor()
+    arbTotalCount = 0
+    stream.on('data', (postDoc) => {
+        arbTotalCount += 1
+        console.log("this is the arbTotalCount: %s", arbTotalCount)
+        postDoc.owner = undefined
+        saveRecursively({model: postDoc, max: 3})
+    }).on('error', function (err) {
+        console.error("there was an error in the stream")
+        console.error(err)
+    }).on('close', function () {
+        console.log("updated all posts")
+    })
+}
+let logging = true
+loggingSave = false
+minimalFeedback = true
+
+// cloneGroup({
+//     groupId: '154420241260828',
+//     accessToken: conf.accessToken(),
+//     firstUrl: "https://graph.facebook.com/v2.8/154420241260828/feed?limit=5&access_token=" + conf.accessToken(),
+//     postModel: post,
+//     groupName: "philosophy",
+// })
+
+// addrealm("source", post, {
+//     type: {
+//         $regex: 'post',
+//         $options: 'i'
+//     }
+// })
 // countCommenters(post)
-
+// addOwner(resource)
 app.get('/', function (req, res) {
     res.render('snippets/posts');
 });

@@ -8,7 +8,7 @@ var postSchema = new Schema({
     data: { type: {}, default: null },
     id: { type: String },
     comments: {
-        data: { type: [{type: Schema.ObjectId, ref: 'post'}], default: [], ref: 'post'},
+        data: { type: [String], default: []},
         history: {
             type: [
                 []
@@ -68,7 +68,7 @@ var postSchema = new Schema({
     frequency: { type: Number, default: 0, min: 0, max: 50000 },
     philosophical: { type: Number, default: 0, min: 0, max: 100 },
     realm: { type: String, default: null },
-    realms: { type: [String], default: ["post"] },
+    realmList: { type: [String], default: null },
     globalImportance: { type: Number, default: 0, min: 0, max: 100 },
     userImportance: { type: Number, default: 0, min: 0, max: 100 },
     image: { type: String, default: null },
@@ -77,11 +77,13 @@ var postSchema = new Schema({
     commenters: { type: [{}], default: [] },
     lastUpdate: { type: String, default: Date.now() }
 })
+
+// postSchema.virtual('commentDocuments', {
+//     ref: 'post', // model
+//     localField: 'comments.data',
+//     foreignField: 'fbData.id'
+// });
+
 var postModel = db.model('post', postSchema)
 
-
-// var postTypeSchema = new Schema({
-//     general: {type: String, required: true},
-
-// })
 module.exports = postModel
