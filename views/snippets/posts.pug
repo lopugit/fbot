@@ -1,0 +1,9 @@
+html 
+  block head
+    title rick deckard
+  body
+    .container(style="width: 100%; height: auto; display: flex; align-items: flex-start; justify-content: flex-start; flex-direction: row; flex-wrap: wrap")
+      each post, key in posts
+        .post(style="width: 100%; max-width: 350px; background-color: rgb(244, 132, 61); color: white; margin: 10px; padding: 10px")
+          span(style="white-space: pre-wrap; word-wrap: break-word; word-break: break-all; white-space: normal; max-width: 100%")= post.message
+          span(style="display: block; font-size: .7rem")= post.updated_time
