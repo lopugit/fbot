@@ -1,2 +1,3 @@
 /node/node_modules/secrets
 /node_modules
+/node/conf/*
